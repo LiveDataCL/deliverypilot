@@ -2,22 +2,37 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.config import settings
 
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 TokenType = Literal["access", "refresh"]
+
+# bcrypt's hard limit — passlib (unmaintained since 2020) has a known break
+# with bcrypt>=4.1 where its own internal truncation-detection logic feeds the
+# backend an oversized test string and raises on every single hash/verify call,
+# not just for genuinely long passwords. Calling the bcrypt package directly
+# sidesteps that broken detection code entirely.
+_BCRYPT_MAX_BYTES = 72
 
 
 def hash_password(password: str) -> str:
-    return _pwd_context.hash(password)
+    encoded = password.encode("utf-8")
+    if len(encoded) > _BCRYPT_MAX_BYTES:
+        # Should never happen for /auth/register — RegisterRequest validates
+        # this up front — but hash_password has no other caller guarding it.
+        raise ValueError(f"Password exceeds bcrypt's {_BCRYPT_MAX_BYTES}-byte limit")
+    return bcrypt.hashpw(encoded, bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain_password: str, password_hash: str) -> bool:
-    return _pwd_context.verify(plain_password, password_hash)
+    try:
+        return bcrypt.checkpw(plain_password.encode("utf-8"), password_hash.encode("utf-8"))
+    except ValueError:
+        # Oversized or malformed input — never let bcrypt's own validation
+        # become an unhandled 500 on the login path; just fail the check.
+        return False
 
 
 def _create_token(
