@@ -8,16 +8,23 @@ transaction (see app/db/tenant.py:set_tenant_session). Because it's transaction
 scoped, it can never leak across a pooled connection to a later, unrelated
 request (verified in tests/test_rls.py).
 
-FORCE is required specifically because the app's own DB role owns these tables
-(it ran this migration). Postgres exempts table owners from RLS by default;
-without FORCE, every policy below would be a silent no-op for our own queries.
+FORCE is what makes these policies apply to a table's OWNER too — by default
+Postgres exempts owners from RLS. The app's runtime role (deliverypilot_app,
+see db/init/01-create-app-role.sql) does NOT own these tables (the migrations
+role, deliverypilot, does), so as a non-owner it's already bound by RLS with
+or without FORCE. FORCE is kept anyway as a second line of defense, in case
+anything is ever run as the owning/migrations role against real data.
 
-`users` is the deliberate exception: it gets ENABLE but NOT FORCE. Login has to
-look a user up by email across all tenants before any business_id is known —
-forcing RLS there would make login query zero rows for everyone, since no
-session variable is set yet at that point in the request. The policy is still
-defined (so a future least-privileged, non-owner DB role would be bound by it),
-it just doesn't restrict our current single owning app role on this one table.
+`users` needs different treatment, not just an exemption: login has to look a
+user up by email across all tenants, before any business_id is known, and a
+single business_id-matching policy would apply to SELECT too and return zero
+rows for that lookup (current_business_id() isn't set yet at that point).
+So `users` gets per-command policies instead of one blanket one: SELECT is
+unrestricted at the DB layer (the app must still filter reads by business_id
+itself wherever tenant scoping actually matters, e.g. a future "Personal"
+listing endpoint — this only removes the DB-layer backstop for that one
+command), while INSERT/UPDATE/DELETE stay tenant-scoped, since every write
+path always knows which business_id it's writing for.
 
 Revision ID: 0002_row_level_security
 Revises: 0001_initial_schema
@@ -71,19 +78,32 @@ def upgrade() -> None:
             """
         )
 
-    # users: see module docstring for why this one is not forced.
+    # users: see module docstring — per-command policies, not one blanket policy.
     op.execute("ALTER TABLE users ENABLE ROW LEVEL SECURITY")
+    op.execute("CREATE POLICY users_select_unrestricted ON users FOR SELECT USING (true)")
     op.execute(
-        """
-        CREATE POLICY tenant_isolation ON users
-        USING (business_id = current_business_id())
-        WITH CHECK (business_id = current_business_id())
-        """
+        "CREATE POLICY users_insert_tenant_scoped ON users FOR INSERT "
+        "WITH CHECK (business_id = current_business_id())"
+    )
+    op.execute(
+        "CREATE POLICY users_update_tenant_scoped ON users FOR UPDATE "
+        "USING (business_id = current_business_id()) "
+        "WITH CHECK (business_id = current_business_id())"
+    )
+    op.execute(
+        "CREATE POLICY users_delete_tenant_scoped ON users FOR DELETE "
+        "USING (business_id = current_business_id())"
     )
 
 
 def downgrade() -> None:
-    op.execute("DROP POLICY IF EXISTS tenant_isolation ON users")
+    for policy in (
+        "users_select_unrestricted",
+        "users_insert_tenant_scoped",
+        "users_update_tenant_scoped",
+        "users_delete_tenant_scoped",
+    ):
+        op.execute(f"DROP POLICY IF EXISTS {policy} ON users")
     op.execute("ALTER TABLE users DISABLE ROW LEVEL SECURITY")
 
     for table in FORCED_TENANT_TABLES:

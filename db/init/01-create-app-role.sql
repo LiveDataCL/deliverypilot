@@ -28,8 +28,11 @@ CREATE ROLE deliverypilot_app LOGIN PASSWORD 'deliverypilot_app' NOSUPERUSER;
 -- default privileges make every future object the bootstrap role creates in
 -- this schema automatically grant these to deliverypilot_app too.
 GRANT USAGE ON SCHEMA public TO deliverypilot_app;
+-- TRUNCATE is included for app/seed.py's local-dev reset (TRUNCATE ...
+-- RESTART IDENTITY CASCADE) — TRUNCATE bypasses RLS entirely regardless of
+-- who runs it, same as it would for any other role.
 ALTER DEFAULT PRIVILEGES FOR ROLE deliverypilot IN SCHEMA public
-    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO deliverypilot_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON TABLES TO deliverypilot_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE deliverypilot IN SCHEMA public
     GRANT USAGE, SELECT ON SEQUENCES TO deliverypilot_app;
 
@@ -41,7 +44,10 @@ CREATE DATABASE deliverypilot_test OWNER deliverypilot;
 \connect deliverypilot_test
 
 GRANT USAGE ON SCHEMA public TO deliverypilot_app;
+-- TRUNCATE is included for app/seed.py's local-dev reset (TRUNCATE ...
+-- RESTART IDENTITY CASCADE) — TRUNCATE bypasses RLS entirely regardless of
+-- who runs it, same as it would for any other role.
 ALTER DEFAULT PRIVILEGES FOR ROLE deliverypilot IN SCHEMA public
-    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO deliverypilot_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON TABLES TO deliverypilot_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE deliverypilot IN SCHEMA public
     GRANT USAGE, SELECT ON SEQUENCES TO deliverypilot_app;

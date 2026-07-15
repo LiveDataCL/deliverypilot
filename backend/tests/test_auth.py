@@ -2,6 +2,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
+from app.db.tenant import set_tenant_session
 from app.models.user import User
 from tests.conftest import register_business
 
@@ -105,6 +106,10 @@ async def test_deactivated_user_is_locked_out_immediately_not_only_on_refresh(
     assert ok_response.status_code == 200
 
     user = await db_session.scalar(select(User).where(User.email == "deact1@example.com"))
+    # users' UPDATE policy is tenant-scoped (migration 0002) — only its SELECT
+    # is deliberately unrestricted, for the login-by-email lookup. A raw test
+    # write has to set the tenant context first, same as any real write path.
+    await set_tenant_session(db_session, user.business_id)
     user.is_active = False
     await db_session.commit()
 

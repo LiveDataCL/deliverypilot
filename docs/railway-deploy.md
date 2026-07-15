@@ -37,7 +37,7 @@ ordinario, es el que el backend usa para todo el tráfico real.
    CREATE ROLE deliverypilot_app LOGIN PASSWORD 'una-contrasena-generada-distinta' NOSUPERUSER;
    GRANT USAGE ON SCHEMA public TO deliverypilot_app;
    ALTER DEFAULT PRIVILEGES FOR ROLE <rol_bootstrap> IN SCHEMA public
-       GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO deliverypilot_app;
+       GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON TABLES TO deliverypilot_app;
    ALTER DEFAULT PRIVILEGES FOR ROLE <rol_bootstrap> IN SCHEMA public
        GRANT USAGE, SELECT ON SEQUENCES TO deliverypilot_app;
    ```
