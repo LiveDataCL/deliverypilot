@@ -47,22 +47,36 @@ jobs:
       - name: Install dependencies
         run: poetry install --no-interaction
 
+      - name: Create restricted app role (RLS requires a non-superuser)
+        # The official postgres image's initdb always makes POSTGRES_USER
+        # (deliverypilot) the bootstrap superuser, and superusers bypass
+        # Row-Level Security unconditionally — FORCE ROW LEVEL SECURITY does
+        # not override that, and Postgres refuses to let the bootstrap user
+        # revoke its own SUPERUSER attribute ("the bootstrap user must have
+        # the SUPERUSER attribute"). So instead of demoting it, create a
+        # separate, ordinary role for the app/tests to actually connect as;
+        # deliverypilot stays superuser but is only ever used for migrations.
+        run: |
+          PGPASSWORD=deliverypilot psql -h localhost -U deliverypilot -d deliverypilot_test <<'SQL'
+          CREATE ROLE deliverypilot_app LOGIN PASSWORD 'deliverypilot_app' NOSUPERUSER;
+          GRANT USAGE ON SCHEMA public TO deliverypilot_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE deliverypilot IN SCHEMA public
+              GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO deliverypilot_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE deliverypilot IN SCHEMA public
+              GRANT USAGE, SELECT ON SEQUENCES TO deliverypilot_app;
+          SQL
+
       - name: Write test .env
         run: |
           cat > .env <<EOF
           ENVIRONMENT=test
-          DATABASE_URL=postgresql+asyncpg://deliverypilot:deliverypilot@localhost:5432/deliverypilot_test
-          TEST_DATABASE_URL=postgresql+asyncpg://deliverypilot:deliverypilot@localhost:5432/deliverypilot_test
+          DATABASE_URL=postgresql+asyncpg://deliverypilot_app:deliverypilot_app@localhost:5432/deliverypilot_test
+          TEST_DATABASE_URL=postgresql+asyncpg://deliverypilot_app:deliverypilot_app@localhost:5432/deliverypilot_test
+          MIGRATIONS_DATABASE_URL=postgresql+asyncpg://deliverypilot:deliverypilot@localhost:5432/deliverypilot_test
+          TEST_MIGRATIONS_DATABASE_URL=postgresql+asyncpg://deliverypilot:deliverypilot@localhost:5432/deliverypilot_test
           REDIS_URL=redis://localhost:6379/0
           JWT_SECRET=ci-only-secret-never-used-outside-this-workflow
           EOF
-
-      - name: Demote Postgres role (RLS requires a non-superuser)
-        # The official postgres image's initdb always makes POSTGRES_USER a
-        # superuser, and superusers bypass Row-Level Security unconditionally
-        # — FORCE ROW LEVEL SECURITY does not override that. Without this,
-        # every RLS policy in migration 0002 is silently inert in CI.
-        run: PGPASSWORD=deliverypilot psql -h localhost -U deliverypilot -d deliverypilot_test -c "ALTER ROLE deliverypilot NOSUPERUSER;"
 
       - name: Run tests
         run: poetry run pytest -v

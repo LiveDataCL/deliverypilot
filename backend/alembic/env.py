@@ -14,7 +14,10 @@ from app.core.config import get_settings
 from app.db.base import Base
 
 config = context.config
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+# Migrations run as the bootstrap superuser, not the app's runtime role — it
+# owns every table and needs privileges (CREATE TABLE/TYPE, FORCE ROW LEVEL
+# SECURITY, CREATE POLICY) the restricted app role deliberately doesn't have.
+config.set_main_option("sqlalchemy.url", get_settings().migrations_database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

@@ -8,8 +8,15 @@ class Settings(BaseSettings):
 
     environment: str = "dev"
 
+    # Runtime role (app + tests) — deliberately NOT the bootstrap superuser.
+    # See db/init/01-create-app-role.sql for why.
     database_url: str
     test_database_url: str | None = None
+    # Migrations-only role (bootstrap superuser) — owns every table, needed
+    # for CREATE TABLE/TYPE, ALTER TABLE ... FORCE ROW LEVEL SECURITY, and
+    # CREATE POLICY. Never used for regular application queries.
+    migrations_database_url: str
+    test_migrations_database_url: str | None = None
     redis_url: str
 
     jwt_secret: str
