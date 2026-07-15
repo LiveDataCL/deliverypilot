@@ -201,8 +201,8 @@ Página dedicada en el panel: **Configuración > Catálogo** y **Configuración 
 - [x] Auth: registro/login con JWT (access 15min + refresh 7d), hash con bcrypt
 - [x] Middleware de tenant: extrae `business_id` del JWT y lo inyecta como dependencia; helper `tenant_query()` que fuerza el filtro
 - [x] Seed script: 1 negocio demo (agua purificada), 2 usuarios (owner + driver), 5 productos (bidón 20L retornable, bidón 20L nuevo, pack botellas, dispensador, bomba manual), 1 combo ("Combo Hogar": 2 bidones + 1 pack), tiers mayoristas para el bidón (10+ y 30+ unidades), 3 métodos de pago (Efectivo con vuelto, Transferencia, POS), 10 clientes con historial de pedidos ficticio
-- [ ] Deploy a Railway (dev) con deploy automático desde `main` — pendiente: lo haces tú manualmente (ver `docs/railway-deploy.md`); el repo ya quedó preparado para eso.
-- [ ] Sentry configurado — código ya integrado (`sentry_sdk.init` condicionado a `SENTRY_DSN`), pero falta que crees el proyecto Sentry real y pases el DSN por variable de entorno.
+- [x] Deploy a Railway (dev) con deploy automático desde `main` — `/docs` vivo en Railway, rol de aplicación separado del bootstrap verificado en producción (rolsuper/rolbypassrls en falso).
+- [x] Sentry configurado — DSN real conectado a un proyecto Sentry.
 
 **Criterios de aceptación:**
 - `/docs` accesible en Railway con auth funcionando
