@@ -66,3 +66,20 @@ async def get_current_user(
     user = await db.get(User, ctx.user_id)
     assert user is not None
     return user
+
+
+def require_role(*allowed_roles: str):
+    """Dependency factory: rejects the request with 403 unless the caller's
+    role is one of `allowed_roles`. Layered on top of get_tenant_context, so
+    it still requires a valid access token first — this only adds a role
+    check, it doesn't replace authentication."""
+
+    async def _check(ctx: TenantContext = Depends(get_tenant_context)) -> TenantContext:
+        if ctx.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"detail": "No tienes permiso para esta accion", "code": "forbidden_role"},
+            )
+        return ctx
+
+    return _check

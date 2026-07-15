@@ -3,6 +3,7 @@ import { AuthProvider } from './auth/AuthContext'
 import { LoginPage } from './auth/LoginPage'
 import { RequireAuth } from './auth/RequireAuth'
 import { AppLayout } from './layout/AppLayout'
+import { CatalogoPage } from './features/catalogo/CatalogoPage'
 import { PlaceholderPage } from './pages/PlaceholderPage'
 import { TrackingPage } from './tracking/TrackingPage'
 import { strings } from './i18n/strings'
@@ -27,7 +28,12 @@ function App() {
           <Route path="/clientes" element={<PlaceholderPage title={strings.nav.clientes} />} />
           <Route path="/repartidores" element={<PlaceholderPage title={strings.nav.repartidores} />} />
           <Route path="/ventas" element={<PlaceholderPage title={strings.nav.ventas} />} />
-          <Route path="/configuracion" element={<PlaceholderPage title={strings.nav.configuracion} />} />
+          <Route path="/configuracion" element={<Navigate to="/configuracion/catalogo" replace />} />
+          <Route path="/configuracion/catalogo" element={<CatalogoPage />} />
+          <Route
+            path="/configuracion/personal"
+            element={<PlaceholderPage title={strings.personal.tab} />}
+          />
         </Route>
       </Routes>
     </AuthProvider>

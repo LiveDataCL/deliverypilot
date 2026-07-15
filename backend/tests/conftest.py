@@ -50,8 +50,12 @@ from sqlalchemy import text  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
+from app.core.security import hash_password  # noqa: E402
 from app.db.base import async_session_factory, engine  # noqa: E402
+from app.db.tenant import set_tenant_session  # noqa: E402
 from app.main import app  # noqa: E402
+from app.models.enums import UserRole  # noqa: E402
+from app.models.user import User  # noqa: E402
 
 
 def _alembic_config() -> Config:
@@ -161,3 +165,26 @@ async def register_business(client: AsyncClient, *, business_name: str, email: s
     )
     assert response.status_code == 201, response.text
     return response.json()
+
+
+async def create_user_in_business(
+    db_session: AsyncSession,
+    *,
+    business_id: int,
+    role: UserRole,
+    email: str,
+    password: str = "ContraseñaSegura123",
+) -> User:
+    """Creates a user with an arbitrary role directly, for tests that need a
+    role Personal management doesn't have an endpoint for yet (e.g. a driver
+    account, to test that catalog writes reject that role) — bypasses the
+    HTTP layer since there's no "create teammate" endpoint to go through
+    until the Personal sub-module is built."""
+    await set_tenant_session(db_session, business_id)
+    user = User(
+        business_id=business_id, role=role, email=email, password_hash=hash_password(password)
+    )
+    db_session.add(user)
+    await db_session.flush()
+    await db_session.commit()
+    return user
