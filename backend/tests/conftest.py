@@ -11,7 +11,17 @@ rely on globally-unique emails/business names rather than per-test transaction
 rollback, which keeps the RLS tests (test_rls.py) able to use real commits
 across multiple sessions/connections instead of being nested inside a rolled-
 back outer transaction. Don't write a test that asserts a total row count.
+
+Event loop note: pytest-asyncio's default (and least version-fragile) behavior
+gives each test function its own event loop. app.db.base.engine is a
+module-level singleton (correct for the real app — one process, one loop, for
+the app's whole lifetime), so its connection pool must not carry a connection
+from one test's loop into another test's loop. Rather than fight pytest-asyncio's
+loop-scope configuration, `_dispose_shared_engine_after_test` below just closes
+the pool after every test, so the next test's first query always opens a fresh
+connection bound to its own loop.
 """
+import asyncio
 import os
 from pathlib import Path
 
@@ -27,10 +37,11 @@ import pytest_asyncio  # noqa: E402
 from alembic import command  # noqa: E402
 from alembic.config import Config  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
-from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
+from sqlalchemy import text  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
-from app.db.base import async_session_factory  # noqa: E402
+from app.db.base import async_session_factory, engine  # noqa: E402
 from app.main import app  # noqa: E402
 
 
@@ -39,6 +50,38 @@ def _alembic_config() -> Config:
     cfg.set_main_option("script_location", str(_BACKEND_DIR / "alembic"))
     cfg.set_main_option("sqlalchemy.url", get_settings().database_url)
     return cfg
+
+
+def _assert_db_role_is_not_superuser() -> None:
+    """Regression guard for the exact failure mode RLS depends on not having:
+    the official postgres Docker image makes POSTGRES_USER a superuser via
+    initdb, and superusers bypass Row-Level Security unconditionally — FORCE
+    ROW LEVEL SECURITY does not override that. If this role is ever superuser
+    (a fresh Postgres without the demotion step in docker-compose.yml's init
+    script or the CI workflow), every RLS test would pass for the wrong reason
+    — appearing to prove isolation while the policies are silently inert. Fail
+    loudly here instead, before any test gets a chance to give a false pass.
+    """
+
+    async def _check() -> tuple[bool, bool]:
+        check_engine = create_async_engine(get_settings().database_url)
+        try:
+            async with check_engine.connect() as conn:
+                result = await conn.execute(
+                    text("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
+                )
+                return result.one()
+        finally:
+            await check_engine.dispose()
+
+    rolsuper, rolbypassrls = asyncio.run(_check())
+    assert not rolsuper and not rolbypassrls, (
+        "The role DATABASE_URL connects as is superuser or has BYPASSRLS — Postgres "
+        "lets such roles bypass Row-Level Security unconditionally, even with FORCE "
+        "ROW LEVEL SECURITY. Every RLS test would pass for the wrong reason. Fix: "
+        "`ALTER ROLE <role> NOSUPERUSER;` (see db/init/01-demote-superuser.sql and "
+        "the CI workflow's demotion step)."
+    )
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -59,7 +102,15 @@ def _apply_migrations():
     cfg = _alembic_config()
     command.downgrade(cfg, "base")
     command.upgrade(cfg, "head")
+    _assert_db_role_is_not_superuser()
     yield
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _dispose_shared_engine_after_test():
+    """See the event-loop note in this file's module docstring."""
+    yield
+    await engine.dispose()
 
 
 @pytest_asyncio.fixture

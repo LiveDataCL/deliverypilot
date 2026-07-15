@@ -57,5 +57,12 @@ jobs:
           JWT_SECRET=ci-only-secret-never-used-outside-this-workflow
           EOF
 
+      - name: Demote Postgres role (RLS requires a non-superuser)
+        # The official postgres image's initdb always makes POSTGRES_USER a
+        # superuser, and superusers bypass Row-Level Security unconditionally
+        # — FORCE ROW LEVEL SECURITY does not override that. Without this,
+        # every RLS policy in migration 0002 is silently inert in CI.
+        run: PGPASSWORD=deliverypilot psql -h localhost -U deliverypilot -d deliverypilot_test -c "ALTER ROLE deliverypilot NOSUPERUSER;"
+
       - name: Run tests
         run: poetry run pytest -v
