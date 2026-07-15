@@ -1,3 +1,4 @@
+import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
@@ -46,6 +47,12 @@ def _create_token(
         "type": token_type,
         "iat": now,
         "exp": now + expires_delta,
+        # RFC 7519's registered uniqueness claim. Without it, two tokens for
+        # the same user/role issued within the same second are byte-for-byte
+        # identical — `iat`/`exp` are JWT NumericDate claims (whole seconds),
+        # so nothing else in the payload varies at sub-second granularity.
+        # Also lays the groundwork for a future revocation list, if needed.
+        "jti": secrets.token_hex(16),
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
