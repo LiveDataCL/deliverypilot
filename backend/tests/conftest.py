@@ -27,6 +27,17 @@ from one test's loop into another test's loop. Rather than fight pytest-asyncio'
 loop-scope configuration, `_dispose_shared_engine_after_test` below just closes
 the pool after every test, so the next test's first query always opens a fresh
 connection bound to its own loop.
+
+`_apply_migrations` note: downgrade, upgrade, and the role safety-check all run
+inside exactly one asyncio.run() call (`_setup_test_database`), instead of one
+asyncio.run() per Alembic command (Alembic's `command.downgrade`/`command.upgrade`
+each independently re-execute alembic/env.py, including its own
+`asyncio.run(run_migrations_online())`, unless handed an existing connection —
+see env.py's `config.attributes.get("connection")` branch). Repeated
+asyncio.run() calls in one process — three of them here, back to back, each
+tearing down a real asyncpg connection/event loop — is the suspected cause of
+Windows-only `ConnectionDoesNotExistError` failures that don't reproduce on
+Linux CI.
 """
 import asyncio
 import os
@@ -48,6 +59,7 @@ from alembic.config import Config  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: E402
+from sqlalchemy.pool import NullPool  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
@@ -67,50 +79,61 @@ def _alembic_config() -> Config:
     return cfg
 
 
-def _assert_db_role_is_not_superuser() -> None:
-    """Regression guard for the exact failure mode RLS depends on not having:
-    the official postgres Docker image makes POSTGRES_USER (the bootstrap
-    role) a superuser via initdb, and superusers bypass Row-Level Security
-    unconditionally — FORCE ROW LEVEL SECURITY does not override that. This
-    checks the RUNTIME role (DATABASE_URL / TEST_DATABASE_URL, e.g.
-    deliverypilot_app) — not the migrations role, which is expected to be the
-    superuser. If the runtime role is ever superuser (DATABASE_URL
-    misconfigured to point at the bootstrap role again), every RLS test would
-    pass for the wrong reason — appearing to prove isolation while the
-    policies are silently inert. Fail loudly here instead, before any test
-    gets a chance to give a false pass.
+def _run_downgrade(connection) -> None:
+    cfg = _alembic_config()
+    cfg.attributes["connection"] = connection
+    command.downgrade(cfg, "base")
+
+
+def _run_upgrade(connection) -> None:
+    cfg = _alembic_config()
+    cfg.attributes["connection"] = connection
+    command.upgrade(cfg, "head")
+
+
+async def _setup_test_database() -> tuple[bool, bool]:
+    """Downgrade, upgrade, and the role safety-check, all inside this one
+    coroutine — see the event-loop / _apply_migrations note in this file's
+    module docstring for why that matters.
+
+    This must be actual migrations, not Base.metadata.create_all(): RLS
+    policies are raw SQL inside migration 0002, which create_all() knows
+    nothing about — using it here would let every RLS test pass for the wrong
+    reason (no policies at all rather than working policies).
     """
-
-    async def _check() -> tuple[bool, bool]:
-        check_engine = create_async_engine(get_settings().database_url)
-        try:
-            async with check_engine.connect() as conn:
-                result = await conn.execute(
-                    text("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
-                )
-                return result.one()
-        finally:
-            await check_engine.dispose()
-
-    rolsuper, rolbypassrls = asyncio.run(_check())
-    assert not rolsuper and not rolbypassrls, (
-        "The role DATABASE_URL connects as is superuser or has BYPASSRLS — Postgres "
-        "lets such roles bypass Row-Level Security unconditionally, even with FORCE "
-        "ROW LEVEL SECURITY. Every RLS test would pass for the wrong reason. DATABASE_URL "
-        "must be the ordinary deliverypilot_app role, not the deliverypilot bootstrap "
-        "role — see db/init/01-create-app-role.sql."
+    migrations_engine = create_async_engine(
+        get_settings().migrations_database_url, poolclass=NullPool
     )
+    try:
+        async with migrations_engine.connect() as connection:
+            await connection.run_sync(_run_downgrade)
+            await connection.run_sync(_run_upgrade)
+    finally:
+        await migrations_engine.dispose()
+
+    # Regression guard for the exact failure mode RLS depends on not having:
+    # the official postgres Docker image makes POSTGRES_USER (the bootstrap
+    # role) a superuser via initdb, and superusers bypass Row-Level Security
+    # unconditionally — FORCE ROW LEVEL SECURITY does not override that. This
+    # checks the RUNTIME role (DATABASE_URL / TEST_DATABASE_URL, e.g.
+    # deliverypilot_app) — not the migrations role, which is expected to be
+    # the superuser. If the runtime role is ever superuser (DATABASE_URL
+    # misconfigured to point at the bootstrap role again), every RLS test
+    # would pass for the wrong reason — appearing to prove isolation while
+    # the policies are silently inert.
+    check_engine = create_async_engine(get_settings().database_url)
+    try:
+        async with check_engine.connect() as connection:
+            result = await connection.execute(
+                text("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
+            )
+            return result.one()
+    finally:
+        await check_engine.dispose()
 
 
 @pytest.fixture(scope="session", autouse=True)
 def _apply_migrations():
-    """Runs the real Alembic migrations (schema + RLS) once per test session.
-
-    This must be actual migrations, not Base.metadata.create_all(): RLS policies
-    are raw SQL inside migration 0002, which create_all() knows nothing about —
-    using it here would let every RLS test pass for the wrong reason (no policies
-    at all rather than working policies).
-    """
     settings = get_settings()
     assert "test" in settings.database_url and "test" in settings.migrations_database_url, (
         "Refusing to run migrations: DATABASE_URL or MIGRATIONS_DATABASE_URL does not "
@@ -119,10 +142,14 @@ def _apply_migrations():
         "TEST_MIGRATIONS_DATABASE_URL in backend/.env and make sure both point at a "
         "*_test database, never at dev/prod."
     )
-    cfg = _alembic_config()
-    command.downgrade(cfg, "base")
-    command.upgrade(cfg, "head")
-    _assert_db_role_is_not_superuser()
+    rolsuper, rolbypassrls = asyncio.run(_setup_test_database())
+    assert not rolsuper and not rolbypassrls, (
+        "The role DATABASE_URL connects as is superuser or has BYPASSRLS — Postgres "
+        "lets such roles bypass Row-Level Security unconditionally, even with FORCE "
+        "ROW LEVEL SECURITY. Every RLS test would pass for the wrong reason. DATABASE_URL "
+        "must be the ordinary deliverypilot_app role, not the deliverypilot bootstrap "
+        "role — see db/init/01-create-app-role.sql."
+    )
     yield
 
 

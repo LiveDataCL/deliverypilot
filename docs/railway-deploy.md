@@ -53,9 +53,9 @@ ordinario, es el que el backend usa para todo el tráfico real.
    ```
 
 Este mismo chequeo corre automáticamente en la suite de tests (`tests/conftest.py`,
-`_assert_db_role_is_not_superuser`) y falla con un mensaje explícito si el rol de
-`TEST_DATABASE_URL`/`DATABASE_URL` es superusuario — pero eso solo protege dev/CI. En
-Railway hay que crear el rol a mano, una vez por entorno.
+dentro de `_setup_test_database`/`_apply_migrations`) y falla con un mensaje explícito
+si el rol de `TEST_DATABASE_URL`/`DATABASE_URL` es superusuario — pero eso solo protege
+dev/CI. En Railway hay que crear el rol a mano, una vez por entorno.
 
 ## 3. Variables de entorno del servicio backend
 
