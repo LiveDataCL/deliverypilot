@@ -38,12 +38,32 @@ asyncio.run() calls in one process — three of them here, back to back, each
 tearing down a real asyncpg connection/event loop — is the suspected cause of
 Windows-only `ConnectionDoesNotExistError` failures that don't reproduce on
 Linux CI.
+
+UPDATE: consolidating to one asyncio.run() call (above) did NOT fix the
+Windows failure — same ConnectionDoesNotExistError, same 34 tests, confirmed
+by re-running on Windows. That rules out "repeated event loops" as the cause.
+The real issue: Windows' default event loop policy is ProactorEventLoop, and
+asyncpg's overlapped I/O socket handling is unreliable under it independent of
+how many loops get created — this affects every asyncpg connection opened
+under a Proactor loop, not just the migration fixture's. pytest-asyncio
+creates its own event loop per test function (not via asyncio.run(), but via
+its own internal loop creation, under whatever policy is globally active at
+that time) — so every test using `client`/`db_session` was equally exposed,
+which is why fixing only the migration fixture's own asyncio.run() call moved
+nothing. Setting the event loop policy to WindowsSelectorEventLoopPolicy here,
+before pytest_asyncio is even imported, is process-global and applies to
+every loop created for the rest of the test run — both this file's own
+asyncio.run() call and every one pytest-asyncio creates per test.
 """
 import asyncio
 import os
+import sys
 from pathlib import Path
 
 from dotenv import dotenv_values
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 _BACKEND_DIR = Path(__file__).resolve().parent.parent
 _env = dotenv_values(_BACKEND_DIR / ".env")
