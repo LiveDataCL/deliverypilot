@@ -223,7 +223,7 @@ Página dedicada en el panel: **Configuración > Catálogo** y **Configuración 
 - [x] Geocoding Nominatim con cache (si el cliente ya tiene lat/lng, NO volver a geocodificar)
 - [x] Máquina de estados del pedido con validación de transiciones + escritura en `order_events`
 - [x] Servicio `recalculate_customer_defaults` al entregar (sección 4.2) — ahora conectado al gatillo real: `order_state_machine.transition_order_status` lo invoca en la transición a `entregado`, condicionado a que el pedido tenga `customer_id`
-- [ ] CRUD repartidores + toggle online/offline — checkpoint Personal, fuera de alcance; sí se construyó `GET /drivers` de solo lectura (necesario para el selector de asignación de pedidos), sin create/update/toggle
+- [x] CRUD repartidores + toggle online/offline — CRUD completo construido para despachadores y repartidores (`POST/GET /staff`, activar/desactivar, resetear contraseña vía enlace firmado); **toggle online/offline explícitamente fuera de esta línea**: es una acción que el propio repartidor dispara desde su app (sección 4, Flutter checklist línea 243), no una acción administrativa de Personal — diferida hasta que exista un contexto autenticado como repartidor real (app Flutter u otro) para el que construir y probar ese endpoint
 - [ ] Asignación de pedido → push FCM al repartidor con sonido/prioridad alta
 - [ ] WebSocket `/ws/driver/{token}`: recibe pings GPS → Redis + publish; persiste en `location_pings` cada 60s
 - [ ] WebSocket `/ws/dispatch/{token}`: emite eventos del canal del negocio (posiciones + cambios de pedido)
@@ -231,7 +231,7 @@ Página dedicada en el panel: **Configuración > Catálogo** y **Configuración 
 **Panel web (React):**
 - [x] Login + layout (sidebar: Pedidos, Mapa, Clientes, Repartidores, Ventas, Configuración)
 - [x] **Configuración > Catálogo** (construir PRIMERO — alimenta todo lo demás): gestión de productos, combos con selector de componentes, tabla de tiers de precio por producto, y métodos de pago (sección 4.4)
-- [ ] **Configuración > Personal**: gestión de despachadores y repartidores (crear, invitar por link, activar/desactivar)
+- [x] **Configuración > Personal**: gestión de despachadores y repartidores (crear, invitar por link, activar/desactivar)
 - [x] **Formulario de pedido con autollenado**: campo teléfono con búsqueda en vivo (debounce 300ms), dropdown de coincidencias, al seleccionar se llena todo; items con +/- de cantidad; precio unitario auto-resuelto por tier (editable); selector de método de pago con campo "¿con cuánto paga?" si es efectivo; total calculado en vivo
 - [x] Tabla de pedidos del día con filtros por estado + acciones (asignar, cancelar)
 - [ ] Mapa en vivo (Leaflet): repartidores con color por estado, pedidos activos, actualización por WebSocket
