@@ -59,6 +59,7 @@ import asyncio
 import os
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from dotenv import dotenv_values
 
@@ -152,15 +153,33 @@ async def _setup_test_database() -> tuple[bool, bool]:
         await check_engine.dispose()
 
 
+def _is_distinguishable_from_prod(prod_url: str, test_url: str) -> bool:
+    """True if `test_url` can't be mistaken for `prod_url` — either the host
+    differs (Neon: same database name `neondb` on every branch, but each
+    branch is a different host/endpoint) or the database name differs (local
+    Postgres: same host, but a separate `*_test` database). A literal "test"
+    substring isn't a reliable signal across providers, so this checks the
+    actual distinguishing fact instead: they must not resolve to the same
+    host+database."""
+    prod = urlsplit(prod_url)
+    test = urlsplit(test_url)
+    return prod.hostname != test.hostname or prod.path != test.path
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _apply_migrations():
     settings = get_settings()
-    assert "test" in settings.database_url and "test" in settings.migrations_database_url, (
-        "Refusing to run migrations: DATABASE_URL or MIGRATIONS_DATABASE_URL does not "
-        f"look like a test database ({settings.database_url!r}, "
-        f"{settings.migrations_database_url!r}). Set TEST_DATABASE_URL and "
-        "TEST_MIGRATIONS_DATABASE_URL in backend/.env and make sure both point at a "
-        "*_test database, never at dev/prod."
+    assert _is_distinguishable_from_prod(
+        _env.get("DATABASE_URL", ""), _env.get("TEST_DATABASE_URL", "")
+    ) and _is_distinguishable_from_prod(
+        _env.get("MIGRATIONS_DATABASE_URL", ""), _env.get("TEST_MIGRATIONS_DATABASE_URL", "")
+    ), (
+        "Refusing to run migrations: TEST_DATABASE_URL/TEST_MIGRATIONS_DATABASE_URL are "
+        "not distinguishable from DATABASE_URL/MIGRATIONS_DATABASE_URL by host or database "
+        "name. Set TEST_DATABASE_URL and TEST_MIGRATIONS_DATABASE_URL in backend/.env to "
+        "point at a genuinely different host (e.g. a separate Neon branch) or a different "
+        "database name (e.g. a local *_test database) — never the same host+database as "
+        "dev/prod."
     )
     rolsuper, rolbypassrls = asyncio.run(_setup_test_database())
     assert not rolsuper and not rolbypassrls, (
