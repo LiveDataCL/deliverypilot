@@ -9,56 +9,94 @@ let it go stale.
 
 ## Open
 
-### asyncpg fails to connect on Windows (local dev blocked)
+### asyncpg fails to connect on Windows (local dev blocked) — partially narrowed, not resolved
 
 - **Discovered:** during Fase 0 local pytest verification; reconfirmed 2026-07-17
-  against a live Neon endpoint.
+  against a live Neon endpoint; narrowed further 2026-07-17 during Neon
+  provisioning.
 - **What:** `asyncpg` connections raise `ConnectionDoesNotExistError` /
-  `ConnectionResetError [WinError 10054]` on this Windows machine — reproduces
-  against both local Postgres (via pytest/`conftest.py`) and a freshly created
-  Neon branch (via a standalone script, no pytest involved). `psql` and
-  `psycopg2` both connect cleanly to the same Neon endpoint from the same
-  machine, ruling out network/TLS/Neon-side causes. Root cause isolated to
-  `asyncpg` on Windows specifically, but not yet identified further.
-- **Status:** Blocking local dev on Windows specifically. CI (Linux) is
-  unaffected — GitHub Actions runs green. The `WindowsSelectorEventLoopPolicy`
-  fix (commit `82bb250`) did not resolve it.
-- **Impact:** The app's real runtime (`app/db/base.py`, built on `asyncpg`)
-  still cannot run locally on this machine until resolved.
+  `ConnectionResetError [WinError 10054]` on this Windows machine when
+  `asyncpg.connect()` is called directly with a raw DSN string — reproduces
+  against both local Postgres (via pytest/`conftest.py`, back during Fase 0)
+  and a freshly created Neon branch (via a standalone diagnostic script, no
+  pytest involved). `psql` and `psycopg2` both connect cleanly to the same
+  Neon endpoint from the same machine, ruling out network/TLS/Neon-side
+  causes — isolated to `asyncpg` on Windows specifically.
+  **New evidence (2026-07-17):** the app's *actual* connection path —
+  SQLAlchemy's async engine → asyncpg dialect, which calls `asyncpg.connect()`
+  with explicit keyword arguments rather than a raw DSN string — did **not**
+  reproduce the bug. `alembic upgrade head` and the full `pytest -v` suite
+  (34/34 passed, including RLS/tenant-isolation/driver-rejection tests) both
+  ran clean against the Neon `test`/`main` branches on this same machine. This
+  suggests the bug may be specific to the raw-DSN-string calling convention,
+  not the keyword-argument one SQLAlchemy uses — but this is **not yet
+  re-tested against local Postgres** via the app's real code path (only ever
+  re-tested against Neon so far), so it's still open whether local dev is
+  actually unblocked or whether Neon just happens not to trigger it.
+- **Status:** Open, narrowed. Not blocking Neon-backed dev/test on this
+  machine (confirmed working). Still unconfirmed whether local
+  Postgres-backed dev/test works again — needs a real re-test against
+  `localhost` Postgres via `pytest`/`alembic` (not a bare diagnostic script)
+  before this can be marked resolved for local dev. CI (Linux) was never
+  affected — GitHub Actions runs green throughout.
+- **Impact:** Neon-backed dev/test work (this session's provisioning, and
+  presumably Fase 1+ going forward) is unblocked. Local Postgres-backed dev
+  is unconfirmed either way.
 
-### deliverypilot_app has BYPASSRLS=true on both Neon branches
+## Resolved
+
+### deliverypilot_app had BYPASSRLS=true on both Neon branches
 
 - **Discovered:** 2026-07-17, during Neon provisioning step 5 (role safety check).
+  **Resolved:** 2026-07-17, same day.
 - **What:** `neonctl roles create` provisioned `deliverypilot_app` with
   `BYPASSRLS=true` on both branches (`rolsuper=False` was correct, but
   `BYPASSRLS` alone is just as fatal — it skips RLS unconditionally, same as
-  a superuser, even with `FORCE ROW LEVEL SECURITY`). Attempted fix via
-  `ALTER ROLE deliverypilot_app NOBYPASSRLS;` (connected as `neondb_owner`)
-  failed: `permission denied to alter role` — `neondb_owner` is not `ADMIN`
-  on `deliverypilot_app` because Neon's control-plane role creation doesn't
-  chain Postgres role-ownership the way SQL `CREATE ROLE` would. `neonctl`
-  has no CLI subcommand to alter an existing role's attributes (`roles
-  create`/`list`/`delete` only).
-- **Status:** Blocking. Provisioning is paused at step 5/6 until this has a
-  fix path — candidates not yet tried: Neon dashboard UI (may expose a
-  role-edit control the CLI doesn't), Neon support, or provisioning
-  `deliverypilot_app` a different way (e.g. via SQL as `neondb_owner`
-  instead of `neonctl roles create`, so ownership chains correctly).
+  a superuser, even with `FORCE ROW LEVEL SECURITY`). Three separate SQL
+  angles were tried, connected as `neondb_owner`, and all three hit the same
+  structural wall: `ALTER ROLE deliverypilot_app NOBYPASSRLS;` failed
+  (`permission denied to alter role`); `DROP OWNED BY deliverypilot_app;`
+  failed (`permission denied to drop objects` — requires membership/privileges
+  of the target role); after switching to explicit `REVOKE`s from the grantor
+  side (which did succeed) plus `DROP ROLE deliverypilot_app;`, the `DROP
+  ROLE` itself failed (`permission denied to drop role`). All three errors
+  boil down to the same cause: `neondb_owner` has `CREATEROLE` but not
+  `ADMIN OPTION` on this specific role, because Neon's control-plane role
+  creation (`neonctl roles create`) doesn't chain Postgres role-ownership the
+  way SQL `CREATE ROLE` would — not a SQL problem to keep probing, since the
+  block is on role-management statements themselves. `neonctl` has no CLI
+  subcommand to alter an existing role's attributes (`roles
+  create`/`list`/`delete` only). The Neon dashboard's "Connect" dialog was
+  checked too (user-confirmed dead end): it only offers "Reset password", no
+  attribute editor.
+- **Fix:** deleted `deliverypilot_app` on each branch via `neonctl roles
+  delete` (a control-plane action, not blocked by SQL permissions), then
+  recreated it via plain SQL `CREATE ROLE deliverypilot_app LOGIN PASSWORD
+  '...' NOSUPERUSER NOBYPASSRLS;` connected as `neondb_owner` — this makes
+  `neondb_owner` the true SQL owner from the start, sidestepping the
+  control-plane/SQL ownership mismatch entirely. Redid the `GRANT USAGE ON
+  SCHEMA public` + both `ALTER DEFAULT PRIVILEGES` statements against the
+  fresh role. Verified via direct `rolsuper`/`rolbypassrls` query on both
+  branches (`False`/`False`), and further confirmed end-to-end by a full
+  `pytest -v` run (34/34 passed) against the `test` branch, including the RLS
+  tests that this exact bug would have made pass for the wrong reason.
 - **IDs:** Project `deliverypilot` (`red-heart-43608078`), org `LiveData`
   (`org-aged-rain-76663648`). Branch `main` (endpoint `ep-billowing-grass-au0fhjiy`).
   Branch `test` (`br-bitter-base-au9qdf8c`, endpoint `ep-divine-grass-au5hsmgx`).
-  Roles: `neondb_owner` (default/bootstrap), `deliverypilot_app` (app role).
-  Database: `neondb` (both branches).
+  Roles: `neondb_owner` (default/bootstrap), `deliverypilot_app` (app role,
+  now SQL-owned by `neondb_owner`, `rolsuper=False`/`rolbypassrls=False` on
+  both branches). Database: `neondb` (both branches).
 
-### CLAUDE.md needs the Neon BYPASSRLS-default note
+### CLAUDE.md needed the Neon BYPASSRLS-default note
 
-- **Discovered:** 2026-07-17.
+- **Discovered:** 2026-07-17. **Resolved:** 2026-07-17, same day.
 - **What:** `neonctl roles create` defaults new roles to `BYPASSRLS=true`,
   unlike vanilla Postgres's `NOSUPERUSER`-only default. Every Neon-provisioned
   role must be verified with the `rolsuper`/`rolbypassrls` query before being
   trusted — on this project or any other.
-- **Status:** Deferred until the BYPASSRLS blocker above is resolved, then add
-  to `CLAUDE.md` alongside the existing two-role pattern documentation.
+- **Fix:** added a note under CLAUDE.md §3 (Entorno de desarrollo) documenting
+  the gotcha and the verification/fallback procedure, cross-referenced to this
+  file for the full incident detail.
 
 ## Deferred (explicit user choice, not forgotten)
 

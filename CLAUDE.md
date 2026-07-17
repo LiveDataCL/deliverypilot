@@ -81,6 +81,21 @@ cd dispatch-web && npm install && npm run dev
 
 Si en la Fase 0 defines una forma distinta de levantar algo, **actualiza esta sección** para que quede documentada.
 
+**⚠️ Provisioning de roles en Neon (u otro proveedor gestionado):** si alguna vez se
+crea un rol vía `neonctl roles create` (o el equivalente del dashboard/API), ese rol
+queda con `BYPASSRLS=true` por defecto — a diferencia de Postgres plano, donde un
+`CREATE ROLE ... NOSUPERUSER` normal no trae `BYPASSRLS`. Un rol con `BYPASSRLS` se
+salta RLS igual que un superusuario, incluso con `FORCE ROW LEVEL SECURITY`. **Verificar
+siempre `SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = '<rol>'` después de
+crear cualquier rol en Neon**, antes de confiarle tráfico de la app — ambas columnas deben
+quedar en `false`. Si sale en `true`, no se puede corregir con `ALTER ROLE ...
+NOBYPASSRLS` (el rol dueño por defecto de Neon no tiene `ADMIN OPTION` sobre roles creados
+por el control-plane, así que tampoco `DROP OWNED BY`/`DROP ROLE` funcionan): hay que
+borrar el rol vía `neonctl roles delete` y recrearlo con `CREATE ROLE` plano por SQL,
+conectado como el rol dueño (`neondb_owner` u equivalente), para que la propiedad quede
+encadenada correctamente desde el inicio. Incidente completo documentado en
+`docs/digital-debt.md`.
+
 ---
 
 ## 4. Reglas de código
