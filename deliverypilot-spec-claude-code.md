@@ -235,7 +235,7 @@ Página dedicada en el panel: **Configuración > Catálogo** y **Configuración 
 - [x] **Formulario de pedido con autollenado**: campo teléfono con búsqueda en vivo (debounce 300ms), dropdown de coincidencias, al seleccionar se llena todo; items con +/- de cantidad; precio unitario auto-resuelto por tier (editable); selector de método de pago con campo "¿con cuánto paga?" si es efectivo; total calculado en vivo
 - [x] Tabla de pedidos del día con filtros por estado + acciones (asignar, cancelar)
 - [ ] Mapa en vivo (Leaflet): repartidores con color por estado, pedidos activos, actualización por WebSocket
-- [ ] Vista Clientes: lista con búsqueda, detalle con historial de pedidos y pedido habitual
+- [x] Vista Clientes: lista con búsqueda, detalle con historial de pedidos y pedido habitual — detalle en `/clientes/:id` compone `GET /customers/{id}` + `GET /orders?customer_id=` (20 más recientes, sin paginador) + `GET/PUT /customers/{id}/defaults`; el pedido habitual siempre lee y edita `customer_defaults` directo (nunca `/prefill`), full-replace igual que `replace_combo_items`
 - [x] **Vista "Clientes por pedir"** (sección 4.3) — movida desde Fase 2 para construirse junto con el resto del checkpoint clientes/autollenado: lista de clientes que ya deberían reordenar, con teléfono a un tap y botón "Crear pedido" (ahora funcional — navega al formulario de pedido pre-llenado con el prefill de ese cliente, igual que si se hubiera seleccionado por el buscador en vivo)
 
 **App Flutter:**
