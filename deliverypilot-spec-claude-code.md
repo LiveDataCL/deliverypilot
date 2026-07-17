@@ -218,6 +218,7 @@ Página dedicada en el panel: **Configuración > Catálogo** y **Configuración 
 - [x] Servicio de pricing: `resolve_unit_price(product_id, quantity)` aplica el tier correcto (sección 4.4); usado al crear/editar items de pedido
 - [x] CRUD métodos de pago por negocio
 - [ ] CRUD clientes + `GET /customers/search?phone_prefix=` + `GET /customers/{id}/prefill` (sección 4.1)
+- [ ] `GET /customers/due-for-reorder` (sección 4.3) — movido desde Fase 2 para construirse junto con el resto del checkpoint clientes/autollenado; no estaba itemizado como línea propia, solo en prosa
 - [ ] CRUD pedidos con `order_items`; creación acepta `customer_id` o datos nuevos (crea cliente automático)
 - [ ] Geocoding Nominatim con cache (si el cliente ya tiene lat/lng, NO volver a geocodificar)
 - [ ] Máquina de estados del pedido con validación de transiciones + escritura en `order_events`
@@ -235,6 +236,7 @@ Página dedicada en el panel: **Configuración > Catálogo** y **Configuración 
 - [ ] Tabla de pedidos del día con filtros por estado + acciones (asignar, cancelar)
 - [ ] Mapa en vivo (Leaflet): repartidores con color por estado, pedidos activos, actualización por WebSocket
 - [ ] Vista Clientes: lista con búsqueda, detalle con historial de pedidos y pedido habitual
+- [ ] **Vista "Clientes por pedir"** (sección 4.3) — movida desde Fase 2 para construirse junto con el resto del checkpoint clientes/autollenado: lista de clientes que ya deberían reordenar, con teléfono a un tap y botón "Crear pedido" (inerte/deshabilitado por ahora — el formulario de pedido con autollenado aún no existe; se conecta en el checkpoint de pedidos)
 
 **App Flutter:**
 - [ ] Login (email/contraseña) + registro de FCM token
@@ -265,7 +267,6 @@ Página dedicada en el panel: **Configuración > Catálogo** y **Configuración 
 
 - [ ] Página pública de tracking `/{tracking_token}`: mapa con repartidor en vivo (solo en_ruta), ETA vía OSRM, estados, nombre del repartidor. Responsive móvil.
 - [ ] Botón en el panel "Copiar link de tracking" + formato listo para WhatsApp
-- [ ] **Vista "Clientes por pedir"** (sección 4.3): lista de clientes que ya deberían reordenar, con botón "Crear pedido" pre-llenado y link `tel:` / `wa.me`
 - [ ] Kanban de pedidos con drag & drop entre estados y a repartidores; al asignar, muestra distancia de cada repartidor libre al punto de entrega
 - [ ] Ruta del día del repartidor (polyline sobre el mapa desde `location_pings`)
 - [ ] Alertas en panel: pedido sin asignar >15 min, repartidor >3 min sin señal (badge + toast)
