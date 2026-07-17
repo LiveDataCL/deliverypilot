@@ -214,9 +214,9 @@ Página dedicada en el panel: **Configuración > Catálogo** y **Configuración 
 ═══════════════════════════════════════════
 
 **Backend:**
-- [ ] CRUD productos + combos (`combo_items`) + tiers de precio (`price_tiers`)
-- [ ] Servicio de pricing: `resolve_unit_price(product_id, quantity)` aplica el tier correcto (sección 4.4); usado al crear/editar items de pedido
-- [ ] CRUD métodos de pago por negocio
+- [x] CRUD productos + combos (`combo_items`) + tiers de precio (`price_tiers`)
+- [x] Servicio de pricing: `resolve_unit_price(product_id, quantity)` aplica el tier correcto (sección 4.4); usado al crear/editar items de pedido
+- [x] CRUD métodos de pago por negocio
 - [ ] CRUD clientes + `GET /customers/search?phone_prefix=` + `GET /customers/{id}/prefill` (sección 4.1)
 - [ ] CRUD pedidos con `order_items`; creación acepta `customer_id` o datos nuevos (crea cliente automático)
 - [ ] Geocoding Nominatim con cache (si el cliente ya tiene lat/lng, NO volver a geocodificar)
@@ -229,7 +229,7 @@ Página dedicada en el panel: **Configuración > Catálogo** y **Configuración 
 
 **Panel web (React):**
 - [ ] Login + layout (sidebar: Pedidos, Mapa, Clientes, Repartidores, Ventas, Configuración)
-- [ ] **Configuración > Catálogo** (construir PRIMERO — alimenta todo lo demás): gestión de productos, combos con selector de componentes, tabla de tiers de precio por producto, y métodos de pago (sección 4.4)
+- [x] **Configuración > Catálogo** (construir PRIMERO — alimenta todo lo demás): gestión de productos, combos con selector de componentes, tabla de tiers de precio por producto, y métodos de pago (sección 4.4)
 - [ ] **Configuración > Personal**: gestión de despachadores y repartidores (crear, invitar por link, activar/desactivar)
 - [ ] **Formulario de pedido con autollenado**: campo teléfono con búsqueda en vivo (debounce 300ms), dropdown de coincidencias, al seleccionar se llena todo; items con +/- de cantidad; precio unitario auto-resuelto por tier (editable); selector de método de pago con campo "¿con cuánto paga?" si es efectivo; total calculado en vivo
 - [ ] Tabla de pedidos del día con filtros por estado + acciones (asignar, cancelar)
