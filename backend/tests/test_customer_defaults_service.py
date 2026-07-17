@@ -6,7 +6,10 @@ from sqlalchemy import select
 
 from app.db.tenant import TenantContext, set_tenant_session
 from app.models.customer import Customer, CustomerDefault
-from app.services.customer_defaults_service import recalculate_customer_defaults
+from app.services.customer_defaults_service import (
+    CustomerNotFoundError,
+    recalculate_customer_defaults,
+)
 from tests.conftest import create_delivered_order, register_business
 
 pytestmark = pytest.mark.asyncio
@@ -217,3 +220,40 @@ async def test_order_frequency_days_is_the_median_gap_of_the_last_six_orders(
     await set_tenant_session(db_session, ctx.business_id)
     updated_customer = await db_session.get(Customer, customer["id"])
     assert updated_customer.order_frequency_days == 10
+
+
+async def test_recalculate_defaults_raises_for_a_nonexistent_customer(client: AsyncClient, db_session):
+    ctx, customer, payment_method, product = await _setup(
+        client, business_name="Defaults G", email="defaultsG@example.com"
+    )
+    with pytest.raises(CustomerNotFoundError):
+        await recalculate_customer_defaults(db_session, ctx, 999999)
+
+
+async def test_recalculate_defaults_clears_stale_rows_when_there_are_no_delivered_orders(
+    client: AsyncClient, db_session
+):
+    """Defensive edge case: recalculate always replaces customer_defaults
+    with whatever the current delivered-order history justifies, including
+    replacing it with nothing if a customer somehow has zero delivered
+    orders (e.g. a future history-reset action) — never leaves stale rows
+    from a previous calculation in place."""
+    ctx, customer, payment_method, product = await _setup(
+        client, business_name="Defaults H", email="defaultsH@example.com"
+    )
+    await set_tenant_session(db_session, ctx.business_id)
+    db_session.add(
+        CustomerDefault(
+            business_id=ctx.business_id,
+            customer_id=customer["id"],
+            product_id=product["id"],
+            quantity=99,
+        )
+    )
+    await db_session.commit()
+
+    await recalculate_customer_defaults(db_session, ctx, customer["id"])
+    await db_session.commit()
+
+    defaults = await _customer_defaults(db_session, ctx, customer["id"])
+    assert defaults == []

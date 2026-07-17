@@ -10,6 +10,13 @@ from app.models.enums import OrderStatus
 from app.models.order import Order, OrderItem
 
 
+class CustomerNotFoundError(Exception):
+    """Raised when customer_id doesn't resolve to a row in this tenant —
+    a real, always-enforced check rather than a bare assert, since
+    customer_id is externally supplied and asserts are stripped entirely
+    under Python's -O flag."""
+
+
 def _mode_with_recency_tiebreak(quantities_most_recent_first: list[int]) -> int:
     """The most frequent quantity wins; on a tie, the quantity from the most
     recent order among the tied values wins (explicit product decision — an
@@ -37,8 +44,22 @@ async def recalculate_customer_defaults(db: AsyncSession, ctx: TenantContext, cu
     trusted to have done this in the same still-open transaction, and a
     caller that runs this after its own commit (as tests do, since the
     inserted orders need to be visible to a separate session/connection)
-    would otherwise have RLS silently filter out every read here."""
+    would otherwise have RLS silently filter out every read here.
+
+    Every call fully replaces customer_defaults with whatever the current
+    delivered-order history justifies — including replacing it with nothing
+    if there's no longer any qualifying history (e.g. a future history-reset
+    action), rather than silently leaving stale rows in place. In normal
+    operation this function only ever fires after an order transitions to
+    `entregado`, so there's always at least one delivered order — the empty
+    case is a defensive guarantee, not an expected path."""
     await set_tenant_session(db, ctx.business_id)
+
+    customer = await db.get(Customer, customer_id)
+    if customer is None:
+        raise CustomerNotFoundError(
+            f"No customer {customer_id} in business {ctx.business_id}"
+        )
 
     last_5_orders = list(
         (
@@ -52,6 +73,19 @@ async def recalculate_customer_defaults(db: AsyncSession, ctx: TenantContext, cu
             )
         ).all()
     )
+
+    existing_defaults = list(
+        (
+            await db.scalars(
+                select(CustomerDefault)
+                .where(CustomerDefault.business_id == ctx.business_id)
+                .where(CustomerDefault.customer_id == customer_id)
+            )
+        ).all()
+    )
+    for row in existing_defaults:
+        await db.delete(row)
+    await db.flush()
 
     if last_5_orders:
         order_ids = [o.id for o in last_5_orders]
@@ -69,19 +103,6 @@ async def recalculate_customer_defaults(db: AsyncSession, ctx: TenantContext, cu
         quantities_by_product: dict[int, list[tuple[int, int]]] = defaultdict(list)
         for item in items:
             quantities_by_product[item.product_id].append((order_rank[item.order_id], item.quantity))
-
-        existing_defaults = list(
-            (
-                await db.scalars(
-                    select(CustomerDefault)
-                    .where(CustomerDefault.business_id == ctx.business_id)
-                    .where(CustomerDefault.customer_id == customer_id)
-                )
-            ).all()
-        )
-        for row in existing_defaults:
-            await db.delete(row)
-        await db.flush()
 
         new_defaults = []
         for product_id, ranked_quantities in quantities_by_product.items():
@@ -110,9 +131,6 @@ async def recalculate_customer_defaults(db: AsyncSession, ctx: TenantContext, cu
             )
         ).all()
     )
-
-    customer = await db.get(Customer, customer_id)
-    assert customer is not None
 
     if len(last_6_orders) < 3:
         customer.order_frequency_days = None
