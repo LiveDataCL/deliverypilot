@@ -50,6 +50,11 @@ export async function listCustomers(query?: string): Promise<Page<Customer>> {
   return response.data
 }
 
+export async function getCustomer(id: number): Promise<Customer> {
+  const response = await apiClient.get<Customer>(`/api/v1/customers/${id}`)
+  return response.data
+}
+
 export async function createCustomer(input: CustomerInput): Promise<Customer> {
   const response = await apiClient.post<Customer>('/api/v1/customers', input)
   return response.data

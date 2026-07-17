@@ -33,6 +33,9 @@ class Settings(BaseSettings):
 
     sentry_dsn: str | None = None
 
+    # Public instance per SPEC.md's stack table; self-host is a later phase.
+    nominatim_url: str = "https://nominatim.openstreetmap.org"
+
 
 @lru_cache
 def get_settings() -> Settings:

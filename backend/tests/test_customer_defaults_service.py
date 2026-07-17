@@ -173,6 +173,42 @@ async def test_recalculate_defaults_replaces_stale_rows_not_just_appends(client:
     assert second_pass[0].quantity == 5
 
 
+async def test_recalculate_defaults_sets_last_order_at_to_the_most_recent_delivery(
+    client: AsyncClient, db_session
+):
+    """last_order_at is read by search ordering and by due-for-reorder's
+    filter/sort — nothing else in the codebase writes it, so this is the
+    only thing that keeps it correct."""
+    ctx, customer, payment_method, product = await _setup(
+        client, business_name="Defaults I", email="defaultsI@example.com"
+    )
+    base = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    most_recent = base + timedelta(days=5)
+    await create_delivered_order(
+        db_session,
+        business_id=ctx.business_id,
+        customer_id=customer["id"],
+        payment_method_id=payment_method["id"],
+        items=[(product["id"], 1, 3000)],
+        delivered_at=base,
+    )
+    await create_delivered_order(
+        db_session,
+        business_id=ctx.business_id,
+        customer_id=customer["id"],
+        payment_method_id=payment_method["id"],
+        items=[(product["id"], 1, 3000)],
+        delivered_at=most_recent,
+    )
+
+    await recalculate_customer_defaults(db_session, ctx, customer["id"])
+    await db_session.commit()
+
+    await set_tenant_session(db_session, ctx.business_id)
+    updated_customer = await db_session.get(Customer, customer["id"])
+    assert updated_customer.last_order_at == most_recent
+
+
 async def test_order_frequency_days_is_null_with_fewer_than_three_orders(client: AsyncClient, db_session):
     ctx, customer, payment_method, product = await _setup(
         client, business_name="Defaults E", email="defaultsE@example.com"
@@ -257,3 +293,7 @@ async def test_recalculate_defaults_clears_stale_rows_when_there_are_no_delivere
 
     defaults = await _customer_defaults(db_session, ctx, customer["id"])
     assert defaults == []
+
+    await set_tenant_session(db_session, ctx.business_id)
+    updated_customer = await db_session.get(Customer, customer["id"])
+    assert updated_customer.last_order_at is None

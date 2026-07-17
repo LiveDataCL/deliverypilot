@@ -90,6 +90,7 @@ from app.core.security import hash_password  # noqa: E402
 from app.db.base import async_session_factory, engine  # noqa: E402
 from app.db.tenant import set_tenant_session  # noqa: E402
 from app.main import app  # noqa: E402
+from app.models.driver import Driver  # noqa: E402
 from app.models.enums import OrderStatus, UserRole  # noqa: E402
 from app.models.order import Order, OrderItem  # noqa: E402
 from app.models.user import User  # noqa: E402
@@ -307,3 +308,26 @@ async def create_delivered_order(
     await db_session.flush()
     await db_session.commit()
     return order
+
+
+async def create_driver_in_business(
+    db_session: AsyncSession,
+    *,
+    business_id: int,
+    email: str,
+    password: str = "ContraseñaSegura123",
+) -> Driver:
+    """Creates a driver (User with role=driver + linked Driver row) directly,
+    since Personal/repartidores CRUD doesn't exist yet (separate checkpoint)
+    — bypasses the HTTP layer the same way create_user_in_business does."""
+    await set_tenant_session(db_session, business_id)
+    user = User(
+        business_id=business_id, role=UserRole.driver, email=email, password_hash=hash_password(password)
+    )
+    db_session.add(user)
+    await db_session.flush()
+    driver = Driver(business_id=business_id, user_id=user.id, vehicle_type="moto")
+    db_session.add(driver)
+    await db_session.flush()
+    await db_session.commit()
+    return driver

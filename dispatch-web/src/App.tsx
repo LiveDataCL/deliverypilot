@@ -5,6 +5,7 @@ import { RequireAuth } from './auth/RequireAuth'
 import { AppLayout } from './layout/AppLayout'
 import { CatalogoPage } from './features/catalogo/CatalogoPage'
 import { ClientesPage } from './features/clientes/ClientesPage'
+import { PedidosPage } from './features/pedidos/PedidosPage'
 import { PlaceholderPage } from './pages/PlaceholderPage'
 import { TrackingPage } from './tracking/TrackingPage'
 import { strings } from './i18n/strings'
@@ -24,7 +25,7 @@ function App() {
           }
         >
           <Route index element={<Navigate to="/pedidos" replace />} />
-          <Route path="/pedidos" element={<PlaceholderPage title={strings.nav.pedidos} />} />
+          <Route path="/pedidos" element={<PedidosPage />} />
           <Route path="/mapa" element={<PlaceholderPage title={strings.nav.mapa} />} />
           <Route path="/clientes" element={<ClientesPage />} />
           <Route path="/repartidores" element={<PlaceholderPage title={strings.nav.repartidores} />} />

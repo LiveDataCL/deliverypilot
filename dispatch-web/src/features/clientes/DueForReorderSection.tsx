@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { strings } from '../../i18n/strings'
 import { listDueForReorder, type Customer } from '../../api/customers'
 
@@ -9,6 +10,7 @@ function daysSince(isoDate: string): number {
 }
 
 export function DueForReorderSection() {
+  const navigate = useNavigate()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -72,9 +74,8 @@ export function DueForReorderSection() {
                   {strings.clientes.whatsapp}
                 </a>
                 <button
-                  disabled
-                  title={strings.clientes.crearPedidoProximamente}
-                  className="text-xs font-medium text-slate-400 cursor-not-allowed"
+                  onClick={() => navigate(`/pedidos?nuevo=1&customer_id=${customer.id}`)}
+                  className="text-xs font-medium text-slate-600 hover:text-slate-900"
                 >
                   {strings.clientes.crearPedido}
                 </button>

@@ -141,4 +141,10 @@ async def recalculate_customer_defaults(db: AsyncSession, ctx: TenantContext, cu
         ]
         customer.order_frequency_days = round(statistics.median(gaps_days), 2)
 
+    # last_order_at is read by search ordering and by due-for-reorder's
+    # filter/sort, but nothing wrote it until now — it must reflect the same
+    # delivered-order history everything else here does, replaced (not just
+    # set-once) on every call, same as order_frequency_days.
+    customer.last_order_at = last_5_orders[0].delivered_at if last_5_orders else None
+
     await db.flush()
