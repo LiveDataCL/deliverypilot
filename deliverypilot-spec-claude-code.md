@@ -219,24 +219,24 @@ Página dedicada en el panel: **Configuración > Catálogo** y **Configuración 
 - [x] CRUD métodos de pago por negocio
 - [x] CRUD clientes + `GET /customers/search?phone_prefix=` + `GET /customers/{id}/prefill` (sección 4.1)
 - [x] `GET /customers/due-for-reorder` (sección 4.3) — movido desde Fase 2 para construirse junto con el resto del checkpoint clientes/autollenado; no estaba itemizado como línea propia, solo en prosa
-- [ ] CRUD pedidos con `order_items`; creación acepta `customer_id` o datos nuevos (crea cliente automático)
-- [ ] Geocoding Nominatim con cache (si el cliente ya tiene lat/lng, NO volver a geocodificar)
-- [ ] Máquina de estados del pedido con validación de transiciones + escritura en `order_events`
-- [x] Servicio `recalculate_customer_defaults` al entregar (sección 4.2) — construido standalone/directamente invocable; NO conectado todavía al gatillo de cambio de estado del pedido (eso corresponde a la máquina de estados, checkpoint de pedidos)
-- [ ] CRUD repartidores + toggle online/offline
+- [x] CRUD pedidos con `order_items`; creación acepta `customer_id` o datos nuevos (crea cliente automático) — create/read/list construidos y probados; no existe un update genérico de contenido (items/notas) de un pedido ya creado más allá de las transiciones de estado, porque nada en el alcance de Fase 1 lo pide (ninguna UI de "editar pedido" está descrita)
+- [x] Geocoding Nominatim con cache (si el cliente ya tiene lat/lng, NO volver a geocodificar)
+- [x] Máquina de estados del pedido con validación de transiciones + escritura en `order_events`
+- [x] Servicio `recalculate_customer_defaults` al entregar (sección 4.2) — ahora conectado al gatillo real: `order_state_machine.transition_order_status` lo invoca en la transición a `entregado`, condicionado a que el pedido tenga `customer_id`
+- [ ] CRUD repartidores + toggle online/offline — checkpoint Personal, fuera de alcance; sí se construyó `GET /drivers` de solo lectura (necesario para el selector de asignación de pedidos), sin create/update/toggle
 - [ ] Asignación de pedido → push FCM al repartidor con sonido/prioridad alta
 - [ ] WebSocket `/ws/driver/{token}`: recibe pings GPS → Redis + publish; persiste en `location_pings` cada 60s
 - [ ] WebSocket `/ws/dispatch/{token}`: emite eventos del canal del negocio (posiciones + cambios de pedido)
 
 **Panel web (React):**
-- [ ] Login + layout (sidebar: Pedidos, Mapa, Clientes, Repartidores, Ventas, Configuración)
+- [x] Login + layout (sidebar: Pedidos, Mapa, Clientes, Repartidores, Ventas, Configuración)
 - [x] **Configuración > Catálogo** (construir PRIMERO — alimenta todo lo demás): gestión de productos, combos con selector de componentes, tabla de tiers de precio por producto, y métodos de pago (sección 4.4)
 - [ ] **Configuración > Personal**: gestión de despachadores y repartidores (crear, invitar por link, activar/desactivar)
-- [ ] **Formulario de pedido con autollenado**: campo teléfono con búsqueda en vivo (debounce 300ms), dropdown de coincidencias, al seleccionar se llena todo; items con +/- de cantidad; precio unitario auto-resuelto por tier (editable); selector de método de pago con campo "¿con cuánto paga?" si es efectivo; total calculado en vivo
-- [ ] Tabla de pedidos del día con filtros por estado + acciones (asignar, cancelar)
+- [x] **Formulario de pedido con autollenado**: campo teléfono con búsqueda en vivo (debounce 300ms), dropdown de coincidencias, al seleccionar se llena todo; items con +/- de cantidad; precio unitario auto-resuelto por tier (editable); selector de método de pago con campo "¿con cuánto paga?" si es efectivo; total calculado en vivo
+- [x] Tabla de pedidos del día con filtros por estado + acciones (asignar, cancelar)
 - [ ] Mapa en vivo (Leaflet): repartidores con color por estado, pedidos activos, actualización por WebSocket
 - [ ] Vista Clientes: lista con búsqueda, detalle con historial de pedidos y pedido habitual
-- [x] **Vista "Clientes por pedir"** (sección 4.3) — movida desde Fase 2 para construirse junto con el resto del checkpoint clientes/autollenado: lista de clientes que ya deberían reordenar, con teléfono a un tap y botón "Crear pedido" (inerte/deshabilitado por ahora — el formulario de pedido con autollenado aún no existe; se conecta en el checkpoint de pedidos)
+- [x] **Vista "Clientes por pedir"** (sección 4.3) — movida desde Fase 2 para construirse junto con el resto del checkpoint clientes/autollenado: lista de clientes que ya deberían reordenar, con teléfono a un tap y botón "Crear pedido" (ahora funcional — navega al formulario de pedido pre-llenado con el prefill de ese cliente, igual que si se hubiera seleccionado por el buscador en vivo)
 
 **App Flutter:**
 - [ ] Login (email/contraseña) + registro de FCM token
