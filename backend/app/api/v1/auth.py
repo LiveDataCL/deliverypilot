@@ -6,7 +6,8 @@ from app.core.deps import get_current_user, get_db
 from app.core.security import create_access_token, create_refresh_token, decode_token
 from app.models.user import User
 from app.schemas.auth import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, UserOut
-from app.services import auth_service
+from app.schemas.staff import AcceptInviteIn
+from app.services import auth_service, staff_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -89,3 +90,17 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)) -
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user)) -> User:
     return user
+
+
+@router.post("/accept-invite", response_model=TokenResponse)
+async def accept_invite(payload: AcceptInviteIn, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+    """Public — the recipient has no credentials yet, only the link. Used for
+    both the initial staff invite and an admin-triggered password reset
+    (SPEC.md §4.4), which share the same token mechanism."""
+    try:
+        user = await staff_service.accept_invite(db, payload.token, payload.new_password)
+    except staff_service.InviteTokenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail={"detail": exc.message, "code": exc.code}
+        ) from exc
+    return _issue_tokens(user)

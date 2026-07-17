@@ -249,3 +249,26 @@ async def test_entregado_transition_fires_recalculate_customer_defaults(client: 
     # or a delivered-order-aware path would do that).
     customer = (await client.get(f"/api/v1/customers/{order['customer_id']}", headers=headers)).json()
     assert customer["last_order_at"] is not None
+
+
+async def test_assign_driver_rejects_a_deactivated_driver(client: AsyncClient, db_session):
+    """SPEC.md §4.4: "un repartidor desactivado no puede... recibir
+    asignaciones" — the Personal checkpoint's deactivate action must be
+    honored here, distinct from driver_not_found (the row resolves fine,
+    it's just not eligible right now)."""
+    headers, me, order = await _setup_order(
+        client, business_name="StateMachine K", email="statemachineK@example.com"
+    )
+    driver = await create_driver_in_business(
+        db_session, business_id=me["business_id"], email="driverK@example.com"
+    )
+    deactivate_response = await client.patch(
+        f"/api/v1/staff/{driver.user_id}/deactivate", headers=headers
+    )
+    assert deactivate_response.status_code == 200, deactivate_response.text
+
+    response = await client.post(
+        f"/api/v1/orders/{order['id']}/assign", json={"driver_id": driver.id}, headers=headers
+    )
+    assert response.status_code == 400
+    assert response.json()["code"] == "driver_inactive"

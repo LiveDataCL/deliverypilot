@@ -8,7 +8,7 @@ from jose import JWTError, jwt
 
 from app.core.config import settings
 
-TokenType = Literal["access", "refresh"]
+TokenType = Literal["access", "refresh", "invite"]
 
 # bcrypt's hard limit — passlib (unmaintained since 2020) has a known break
 # with bcrypt>=4.1 where its own internal truncation-detection logic feeds the
@@ -69,12 +69,35 @@ def create_refresh_token(user_id: int, business_id: int, role: str) -> str:
     )
 
 
+def create_invite_token(
+    user_id: int, business_id: int, role: str, password_token_issued_at: datetime
+) -> str:
+    """SPEC.md §4.4's "invitar por link"/"resetear contraseña", both reusing
+    this one token type. `password_token_issued_at` must exactly match the
+    same-named column on the user row at accept-time — see migration 0003
+    for why (makes the link single-use, not just expiry-bounded)."""
+    now = datetime.now(timezone.utc)
+    payload: dict[str, Any] = {
+        "sub": str(user_id),
+        "business_id": business_id,
+        "role": role,
+        "type": "invite",
+        "iat": now,
+        "exp": now + timedelta(days=settings.invite_token_expire_days),
+        "jti": secrets.token_hex(16),
+        "pwd_token_iat": password_token_issued_at.isoformat(),
+    }
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
 @dataclass(frozen=True)
 class TokenPayload:
     user_id: int
     business_id: int
     role: str
     token_type: TokenType
+    # Only present on "invite" tokens — see create_invite_token.
+    password_token_issued_at: str | None = None
 
 
 def decode_token(token: str) -> TokenPayload:
@@ -89,6 +112,7 @@ def decode_token(token: str) -> TokenPayload:
             business_id=int(payload["business_id"]),
             role=str(payload["role"]),
             token_type=payload["type"],
+            password_token_issued_at=payload.get("pwd_token_iat"),
         )
     except (KeyError, ValueError) as exc:
         raise ValueError("invalid_token") from exc

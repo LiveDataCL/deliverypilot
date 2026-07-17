@@ -14,6 +14,7 @@ interface AuthContextValue {
   user: CurrentUser | null
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
+  loginWithTokens: (accessToken: string, refreshToken: string) => Promise<void>
   logout: () => void
 }
 
@@ -50,13 +51,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await fetchMe()
   }, [fetchMe])
 
+  // For flows that already have a token pair from the API response itself
+  // (accept-invite returns tokens directly, same as login does) -- no
+  // second round-trip needed, just store and refetch /me.
+  const loginWithTokens = useCallback(
+    async (accessToken: string, refreshToken: string) => {
+      tokenStorage.set(accessToken, refreshToken)
+      await fetchMe()
+    },
+    [fetchMe],
+  )
+
   const logout = useCallback(() => {
     tokenStorage.clear()
     setUser(null)
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, loginWithTokens, logout }}>
       {children}
     </AuthContext.Provider>
   )

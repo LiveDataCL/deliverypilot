@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
+    # SPEC.md §4.4 invite/reset-password links — no stated duration, 7 days
+    # is a reasonable default matching refresh_token_expire_days.
+    invite_token_expire_days: int = 7
 
     fcm_credentials_json: str | None = None
 

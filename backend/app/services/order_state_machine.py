@@ -7,6 +7,7 @@ from app.db.tenant import TenantContext, tenant_query
 from app.models.driver import Driver
 from app.models.enums import OrderStatus, UserRole
 from app.models.order import Order, OrderEvent
+from app.models.user import User
 from app.services.customer_defaults_service import recalculate_customer_defaults
 
 _DISPATCHER_ROLES = (UserRole.business_owner.value, UserRole.dispatcher.value)
@@ -82,6 +83,15 @@ async def assign_driver(
     driver = await db.scalar(tenant_query(Driver, ctx).where(Driver.id == driver_id))
     if driver is None:
         raise DriverNotFoundError()
+
+    driver_user = await db.scalar(tenant_query(User, ctx).where(User.id == driver.user_id))
+    if driver_user is None or not driver_user.is_active:
+        # SPEC.md §4.4: "un repartidor desactivado no puede... recibir
+        # asignaciones" — distinct from DriverNotFoundError (the row exists
+        # and resolves in-tenant, it's just not eligible right now).
+        raise InvalidTransitionError(
+            "driver_inactive", "El repartidor esta desactivado y no puede recibir pedidos"
+        )
 
     order.status = OrderStatus.asignado
     order.driver_id = driver.id

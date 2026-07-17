@@ -29,6 +29,16 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     fcm_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    # NULL = invited but hasn't set a real password yet (Personal checkpoint).
+    # Never touched by a later admin-triggered password reset.
+    invite_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Stamped fresh on every invite/reset issuance, embedded in that token's
+    # JWT payload, and required to match exactly at accept-time -- makes the
+    # link genuinely single-use rather than just expiry-bounded (see
+    # migration 0003 for the full reasoning).
+    password_token_issued_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
