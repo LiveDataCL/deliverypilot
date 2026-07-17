@@ -57,7 +57,10 @@ asyncio.run() call and every one pytest-asyncio creates per test.
 """
 import asyncio
 import os
+import secrets
 import sys
+from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -87,7 +90,8 @@ from app.core.security import hash_password  # noqa: E402
 from app.db.base import async_session_factory, engine  # noqa: E402
 from app.db.tenant import set_tenant_session  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models.enums import UserRole  # noqa: E402
+from app.models.enums import OrderStatus, UserRole  # noqa: E402
+from app.models.order import Order, OrderItem  # noqa: E402
 from app.models.user import User  # noqa: E402
 
 
@@ -254,3 +258,52 @@ async def create_user_in_business(
     await db_session.flush()
     await db_session.commit()
     return user
+
+
+async def create_delivered_order(
+    db_session: AsyncSession,
+    *,
+    business_id: int,
+    customer_id: int,
+    payment_method_id: int,
+    items: list[tuple[int, int, int]],
+    delivered_at: datetime,
+) -> Order:
+    """Inserts an already-`entregado` order directly, for tests of
+    recalculate_customer_defaults/prefill/due-for-reorder — none of these
+    depend on the orders API/state machine (not built yet, pedidos
+    checkpoint), only on reading rows in the orders/order_items tables that
+    already exist as of Fase 0. `items` is a list of
+    (product_id, quantity, unit_price)."""
+    await set_tenant_session(db_session, business_id)
+    amount = sum(quantity * unit_price for _product_id, quantity, unit_price in items)
+    order = Order(
+        business_id=business_id,
+        customer_id=customer_id,
+        customer_name="Cliente de prueba",
+        customer_phone="+56900000000",
+        delivery_address="Direccion de prueba 123",
+        delivery_lat=Decimal("-33.45"),
+        delivery_lng=Decimal("-70.65"),
+        amount=amount,
+        payment_method_id=payment_method_id,
+        status=OrderStatus.entregado,
+        tracking_token=secrets.token_hex(16),
+        delivered_at=delivered_at,
+    )
+    db_session.add(order)
+    await db_session.flush()
+    for product_id, quantity, unit_price in items:
+        db_session.add(
+            OrderItem(
+                business_id=business_id,
+                order_id=order.id,
+                product_id=product_id,
+                quantity=quantity,
+                unit_price=unit_price,
+                subtotal=quantity * unit_price,
+            )
+        )
+    await db_session.flush()
+    await db_session.commit()
+    return order
