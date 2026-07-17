@@ -6,6 +6,7 @@ import { RequireAuth } from './auth/RequireAuth'
 import { AppLayout } from './layout/AppLayout'
 import { CatalogoPage } from './features/catalogo/CatalogoPage'
 import { ClientesPage } from './features/clientes/ClientesPage'
+import { CustomerDetailPage } from './features/clientes/CustomerDetailPage'
 import { PedidosPage } from './features/pedidos/PedidosPage'
 import { PersonalPage } from './features/personal/PersonalPage'
 import { PlaceholderPage } from './pages/PlaceholderPage'
@@ -31,6 +32,7 @@ function App() {
           <Route path="/pedidos" element={<PedidosPage />} />
           <Route path="/mapa" element={<PlaceholderPage title={strings.nav.mapa} />} />
           <Route path="/clientes" element={<ClientesPage />} />
+          <Route path="/clientes/:id" element={<CustomerDetailPage />} />
           <Route path="/repartidores" element={<PlaceholderPage title={strings.nav.repartidores} />} />
           <Route path="/ventas" element={<PlaceholderPage title={strings.nav.ventas} />} />
           <Route path="/configuracion" element={<Navigate to="/configuracion/catalogo" replace />} />

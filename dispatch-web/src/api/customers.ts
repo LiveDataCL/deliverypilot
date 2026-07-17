@@ -83,3 +83,34 @@ export async function listDueForReorder(): Promise<Page<Customer>> {
   })
   return response.data
 }
+
+export interface CustomerDefault {
+  product_id: number
+  name: string
+  quantity: number
+}
+
+export interface CustomerDefaultInput {
+  product_id: number
+  quantity: number
+}
+
+// The raw customer_defaults table -- always what's displayed AND edited
+// here, deliberately never /prefill (which sometimes shows last-order
+// items instead, a different concept -- see the clientes-detail-view
+// checkpoint's scoping notes for why that distinction matters).
+export async function listCustomerDefaults(customerId: number): Promise<CustomerDefault[]> {
+  const response = await apiClient.get<CustomerDefault[]>(`/api/v1/customers/${customerId}/defaults`)
+  return response.data
+}
+
+export async function replaceCustomerDefaults(
+  customerId: number,
+  items: CustomerDefaultInput[],
+): Promise<CustomerDefault[]> {
+  const response = await apiClient.put<CustomerDefault[]>(
+    `/api/v1/customers/${customerId}/defaults`,
+    items,
+  )
+  return response.data
+}

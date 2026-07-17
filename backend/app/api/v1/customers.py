@@ -5,7 +5,14 @@ from app.core.deps import get_db, require_role
 from app.db.tenant import TenantContext
 from app.models.enums import UserRole
 from app.schemas.common import Page
-from app.schemas.customer import CustomerCreate, CustomerOut, CustomerPrefillOut, CustomerUpdate
+from app.schemas.customer import (
+    CustomerCreate,
+    CustomerDefaultIn,
+    CustomerDefaultOut,
+    CustomerOut,
+    CustomerPrefillOut,
+    CustomerUpdate,
+)
 from app.services import customer_service
 from app.services.customer_service import CustomerValidationError
 
@@ -110,6 +117,34 @@ async def prefill(
     db: AsyncSession = Depends(get_db),
 ) -> CustomerPrefillOut:
     result = await customer_service.get_prefill(db, ctx, customer_id)
+    if result is None:
+        raise _not_found()
+    return result
+
+
+@router.get("/{customer_id}/defaults", response_model=list[CustomerDefaultOut])
+async def list_customer_defaults(
+    customer_id: int,
+    ctx: TenantContext = Depends(require_role(*_ROLES)),
+    db: AsyncSession = Depends(get_db),
+) -> list[CustomerDefaultOut]:
+    result = await customer_service.list_customer_defaults(db, ctx, customer_id)
+    if result is None:
+        raise _not_found()
+    return result
+
+
+@router.put("/{customer_id}/defaults", response_model=list[CustomerDefaultOut])
+async def replace_customer_defaults(
+    customer_id: int,
+    payload: list[CustomerDefaultIn],
+    ctx: TenantContext = Depends(require_role(*_ROLES)),
+    db: AsyncSession = Depends(get_db),
+) -> list[CustomerDefaultOut]:
+    try:
+        result = await customer_service.replace_customer_defaults(db, ctx, customer_id, payload)
+    except CustomerValidationError as exc:
+        raise _validation_error(exc) from exc
     if result is None:
         raise _not_found()
     return result

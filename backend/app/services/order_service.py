@@ -242,6 +242,7 @@ async def list_orders(
     offset: int,
     status: OrderStatus | None = None,
     on_date: date_type | None = None,
+    customer_id: int | None = None,
 ) -> tuple[list[OrderOut], int]:
     query = tenant_query(Order, ctx)
     if status is not None:
@@ -249,6 +250,8 @@ async def list_orders(
     if on_date is not None:
         start_utc, end_utc = _santiago_day_bounds_utc(on_date)
         query = query.where(Order.created_at >= start_utc, Order.created_at < end_utc)
+    if customer_id is not None:
+        query = query.where(Order.customer_id == customer_id)
 
     total = await db.scalar(select(func.count()).select_from(query.subquery())) or 0
     orders = list(

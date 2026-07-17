@@ -91,6 +91,7 @@ export async function createOrder(input: OrderCreateInput): Promise<Order> {
 export async function listOrders(params: {
   status?: OrderStatus
   on_date?: string
+  customer_id?: number
   limit?: number
   offset?: number
 }): Promise<Page<Order>> {

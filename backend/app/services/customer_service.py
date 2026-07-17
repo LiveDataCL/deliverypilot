@@ -8,7 +8,14 @@ from app.models.customer import Customer, CustomerDefault
 from app.models.enums import OrderStatus
 from app.models.order import Order, OrderItem
 from app.models.product import Product
-from app.schemas.customer import CustomerCreate, CustomerPrefillOut, CustomerUpdate, SuggestedItemOut
+from app.schemas.customer import (
+    CustomerCreate,
+    CustomerDefaultIn,
+    CustomerDefaultOut,
+    CustomerPrefillOut,
+    CustomerUpdate,
+    SuggestedItemOut,
+)
 from app.services.pricing_service import resolve_unit_price
 
 # Non-terminal order states — a customer with any order in one of these is
@@ -208,3 +215,91 @@ async def get_prefill(db: AsyncSession, ctx: TenantContext, customer_id: int) ->
     return CustomerPrefillOut(
         customer=customer, suggested_items=suggested_items, suggestion_source="defaults"
     )
+
+
+async def list_customer_defaults(
+    db: AsyncSession, ctx: TenantContext, customer_id: int
+) -> list[CustomerDefaultOut] | None:
+    """The raw customer_defaults table, not /prefill's blended suggestion —
+    empty is a normal, expected result (customer has 0 delivered orders yet,
+    or was reset via recalculate_customer_defaults's empty-history path),
+    not an error."""
+    customer = await _get_customer_or_none(db, ctx, customer_id)
+    if customer is None:
+        return None
+
+    rows = (
+        await db.execute(
+            select(CustomerDefault, Product)
+            .join(Product, Product.id == CustomerDefault.product_id)
+            .where(CustomerDefault.customer_id == customer_id)
+            .where(CustomerDefault.business_id == ctx.business_id)
+        )
+    ).all()
+    return [
+        CustomerDefaultOut(product_id=product.id, name=product.name, quantity=default.quantity)
+        for default, product in rows
+    ]
+
+
+async def replace_customer_defaults(
+    db: AsyncSession, ctx: TenantContext, customer_id: int, items: list[CustomerDefaultIn]
+) -> list[CustomerDefaultOut] | None:
+    """Manual edit path (SPEC.md §4.2's "fast-start reference, never
+    binding"): full-replace, same pattern as catalog_service.
+    replace_combo_items/replace_price_tiers. recalculate_customer_defaults
+    will silently overwrite whatever's set here once real delivered-order
+    history accumulates — that's intentional, not a bug to guard against."""
+    customer = await _get_customer_or_none(db, ctx, customer_id)
+    if customer is None:
+        return None
+
+    product_ids = [item.product_id for item in items]
+    if len(product_ids) != len(set(product_ids)):
+        raise CustomerValidationError(
+            "duplicate_product", "Un mismo producto aparece mas de una vez"
+        )
+
+    products_by_id: dict[int, Product] = {}
+    if product_ids:
+        products = list(
+            (await db.scalars(tenant_query(Product, ctx).where(Product.id.in_(product_ids)))).all()
+        )
+        products_by_id = {p.id: p for p in products}
+        missing = set(product_ids) - products_by_id.keys()
+        if missing:
+            raise CustomerValidationError(
+                "product_not_found", f"Producto(s) no encontrados: {sorted(missing)}"
+            )
+
+    existing = list(
+        (
+            await db.scalars(
+                select(CustomerDefault)
+                .where(CustomerDefault.business_id == ctx.business_id)
+                .where(CustomerDefault.customer_id == customer_id)
+            )
+        ).all()
+    )
+    for row in existing:
+        await db.delete(row)
+    await db.flush()
+
+    new_rows = [
+        CustomerDefault(
+            business_id=ctx.business_id,
+            customer_id=customer_id,
+            product_id=item.product_id,
+            quantity=item.quantity,
+        )
+        for item in items
+    ]
+    db.add_all(new_rows)
+    await db.flush()
+
+    return [
+        CustomerDefaultOut(
+            product_id=item.product_id, name=products_by_id[item.product_id].name, quantity=item.quantity
+        )
+        for item in items
+    ]

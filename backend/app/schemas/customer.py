@@ -47,6 +47,17 @@ class CustomerOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class CustomerDefaultIn(BaseModel):
+    product_id: int
+    quantity: int = Field(gt=0)
+
+
+class CustomerDefaultOut(BaseModel):
+    product_id: int
+    name: str
+    quantity: int
+
+
 class SuggestedItemOut(BaseModel):
     product_id: int
     name: str

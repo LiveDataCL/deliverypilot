@@ -352,3 +352,37 @@ async def test_list_orders_filters_by_status(client: AsyncClient):
     response = await client.get("/api/v1/orders", params={"status": "entregado"}, headers=headers)
     assert response.status_code == 200
     assert response.json()["total"] == 0
+
+
+async def test_list_orders_filters_by_customer_id(client: AsyncClient):
+    headers, customer_a, cash, transfer, product = await _setup(
+        client, business_name="Pedidos M", email="pedidosM@example.com"
+    )
+    await _give_customer_coordinates(client, headers, customer_a["id"])
+    customer_b = (
+        await client.post(
+            "/api/v1/customers",
+            json={"phone": "+56933335555", "name": "Otro cliente", "address": "Calle 2"},
+            headers=headers,
+        )
+    ).json()
+    await _give_customer_coordinates(client, headers, customer_b["id"])
+
+    for customer in (customer_a, customer_b):
+        await client.post(
+            "/api/v1/orders",
+            json={
+                "customer_id": customer["id"],
+                "items": [{"product_id": product["id"], "quantity": 1}],
+                "payment_method_id": transfer["id"],
+            },
+            headers=headers,
+        )
+
+    response = await client.get(
+        "/api/v1/orders", params={"customer_id": customer_a["id"]}, headers=headers
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["customer_id"] == customer_a["id"]

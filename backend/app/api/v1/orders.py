@@ -66,11 +66,12 @@ async def list_orders(
     offset: int = Query(0, ge=0),
     status_filter: OrderStatus | None = Query(None, alias="status"),
     on_date: date | None = Query(None),
+    customer_id: int | None = Query(None),
     ctx: TenantContext = Depends(require_role(*_DISPATCHER_ROLES)),
     db: AsyncSession = Depends(get_db),
 ) -> Page[OrderOut]:
     items, total = await order_service.list_orders(
-        db, ctx, limit=limit, offset=offset, status=status_filter, on_date=on_date
+        db, ctx, limit=limit, offset=offset, status=status_filter, on_date=on_date, customer_id=customer_id
     )
     return Page[OrderOut](items=items, total=total, limit=limit, offset=offset)
 

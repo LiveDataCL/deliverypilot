@@ -1,9 +1,11 @@
 import { Fragment, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { strings } from '../../i18n/strings'
 import { listCustomers, type Customer } from '../../api/customers'
 import { CustomerForm } from './CustomerForm'
 
 export function CustomersSection() {
+  const navigate = useNavigate()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [query, setQuery] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -77,7 +79,13 @@ export function CustomersSection() {
                   <td className="px-4 py-2">{customer.name}</td>
                   <td className="px-4 py-2">{customer.phone}</td>
                   <td className="px-4 py-2">{customer.address}</td>
-                  <td className="px-4 py-2 text-right">
+                  <td className="space-x-3 px-4 py-2 text-right">
+                    <button
+                      onClick={() => navigate(`/clientes/${customer.id}`)}
+                      className="text-xs font-medium text-slate-600 hover:text-slate-900"
+                    >
+                      {strings.clientes.verDetalle}
+                    </button>
                     <button
                       onClick={() => setEditingId(customer.id)}
                       className="text-xs font-medium text-slate-600 hover:text-slate-900"
