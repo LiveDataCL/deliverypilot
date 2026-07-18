@@ -166,6 +166,16 @@ export const strings = {
     estadoCancelado: 'Cancelado',
     estadoFallido: 'Fallido',
   },
+  mapa: {
+    conectado: 'Conectado en vivo',
+    reconectando: 'Reconectando...',
+    sinRepartidoresConPosicion: 'Ningun repartidor tiene una posicion registrada todavia.',
+    repartidorEstadoOffline: 'Desconectado',
+    repartidorEstadoOnline: 'Conectado',
+    repartidorEstadoBusy: 'Ocupado',
+    pedidoPendiente: 'Pendiente',
+    pedidoEnCurso: 'En curso',
+  },
   tracking: {
     title: 'Seguimiento de tu pedido',
     comingInPhase2: 'El seguimiento publico en vivo se construye en la Fase 2.',

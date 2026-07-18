@@ -8,6 +8,12 @@ export interface Driver {
   user_id: number
   vehicle_type: string
   status: DriverStatus
+  // Last-known position from before this backend process last restarted --
+  // the live map's initial render source; live updates come from
+  // /ws/dispatch's driver_position/positions_snapshot events instead.
+  last_lat: string | null
+  last_lng: string | null
+  last_seen_at: string | null
 }
 
 // Read-only -- Driver CRUD (create/update/toggle online-offline) belongs to

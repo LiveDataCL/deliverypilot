@@ -98,6 +98,25 @@ let it go stale.
   the gotcha and the verification/fallback procedure, cross-referenced to this
   file for the full incident detail.
 
+### MapaPage's "pedidos activos" reuses GET /orders?on_date=today with client-side status filtering
+
+- **Discovered:** 2026-07-17, building the FCM/WebSocket/map checkpoint.
+- **What:** The live map (`dispatch-web/src/features/mapa/MapaPage.tsx`)
+  needs to show active (non-terminal) orders as markers. `GET /orders` only
+  supports a single `status` value, not a list, so there's no server-side
+  way to ask for "every non-terminal order" in one call. `MapaPage` instead
+  calls `listOrders({ on_date: today })` (the same call `PedidosPage`
+  already makes) and filters out `entregado`/`cancelado`/`fallido`
+  client-side.
+- **Decision:** deliberate simplification, not a missing endpoint no one
+  noticed. Reasonable at current pilot volume (one business, a handful of
+  orders/day) — fetching a full day's orders and filtering in the browser
+  is cheap. Revisit (either a `status__in` list param or a dedicated
+  `GET /orders/active` endpoint) if daily order volume ever grows enough
+  that shipping a full day's order rows to render a handful of map markers
+  becomes the wrong tradeoff.
+- **Status:** Open, low priority. No user-facing symptom today.
+
 ## Deferred (explicit user choice, not forgotten)
 
 ### Passwords/keys to rotate before production launch
@@ -115,3 +134,31 @@ let it go stale.
 - **Status:** Role passwords (`neondb_owner` on `main`/`test`) still deferred
   by explicit user choice until before production launch. API key rotation
   is resolved.
+
+### Redis pub/sub deferred in favor of in-process WebSocket broadcast
+
+- **Discovered:** 2026-07-17, during FCM/WebSocket/map scoping for Fase 1.
+- **What:** SPEC.md §2/§3 documents Redis 7 for the WebSocket pub/sub layer
+  (`driver:{id}:pos` JSON key with 120s TTL, `business:{id}:events` pub/sub
+  channel) — needed to broadcast across multiple backend processes. Actual
+  current scale is a single Railway backend instance, one pilot business,
+  1-3 drivers — no horizontal scaling yet. The `redis` dependency
+  (`pyproject.toml`), the `redis` service in `docker-compose.yml`, and the
+  `redis_url` config field all already exist from the Fase 0 stack setup,
+  but no code anywhere actually connects to Redis.
+- **Decision:** built an in-process `ConnectionManager`
+  (`app/core/ws_manager.py`) that holds WebSocket connections and each
+  driver's last-known position in memory, keyed by `business_id`,
+  broadcasting directly with no pub/sub hop. Its `broadcast(business_id,
+  event)` method signature is kept close to what a Redis-backed version
+  would need, so swapping the internals to `redis.publish()`/`subscribe()`
+  later is a small, mechanical change, not a rewrite.
+- **Tradeoff accepted:** in-memory position/connection state resets on every
+  backend restart or redeploy — a dispatch client reconnecting right after a
+  deploy sees an empty position cache until the next round of driver pings
+  arrives. Acceptable at current scale.
+- **Status:** Deferred, explicit user choice — not a bug, a scale-appropriate
+  simplification. Revisit when Railway actually runs 2+ backend instances,
+  since multi-instance broadcast is the only thing here that genuinely
+  requires Redis. The Railway Redis add-on for prod is still not
+  provisioned; not needed until this is revisited.

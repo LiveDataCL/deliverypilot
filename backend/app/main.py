@@ -4,6 +4,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.api.v1.router import router as api_v1_router
+from app.api.v1.ws import router as ws_router
 from app.core.config import settings
 
 if settings.sentry_dsn:
@@ -11,6 +12,9 @@ if settings.sentry_dsn:
 
 app = FastAPI(title="DeliveryPilot API", version="0.1.0")
 app.include_router(api_v1_router)
+# Not under /api/v1 -- SPEC.md's own route literals are /ws/driver/{token}
+# and /ws/dispatch/{token}.
+app.include_router(ws_router)
 
 
 @app.exception_handler(HTTPException)

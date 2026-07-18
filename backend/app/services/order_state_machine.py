@@ -3,11 +3,13 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.ws_manager import manager as ws_manager
 from app.db.tenant import TenantContext, tenant_query
 from app.models.driver import Driver
 from app.models.enums import OrderStatus, UserRole
 from app.models.order import Order, OrderEvent
 from app.models.user import User
+from app.services import fcm_service
 from app.services.customer_defaults_service import recalculate_customer_defaults
 
 _DISPATCHER_ROLES = (UserRole.business_owner.value, UserRole.dispatcher.value)
@@ -105,6 +107,27 @@ async def assign_driver(
         )
     )
     await db.flush()
+
+    # Side effects of the transition, same precedent as
+    # recalculate_customer_defaults below: triggered from the service layer,
+    # not the router. A push/broadcast failure must never fail the
+    # assignment itself -- fcm_service.send_push and ws_manager.broadcast
+    # both degrade to a no-op rather than raising.
+    await fcm_service.send_push(
+        driver_user.fcm_token,
+        title="Nuevo pedido asignado",
+        body=f"Tienes un pedido para entregar en {order.delivery_address}",
+        data={"type": "order_assigned", "order_id": str(order.id)},
+    )
+    await ws_manager.broadcast(
+        ctx.business_id,
+        {
+            "type": "order_status_changed",
+            "order_id": order.id,
+            "status": order.status.value,
+            "driver_id": order.driver_id,
+        },
+    )
     return order
 
 
@@ -158,5 +181,10 @@ async def transition_order_status(
 
     if new_status == OrderStatus.entregado and order.customer_id is not None:
         await recalculate_customer_defaults(db, ctx, order.customer_id)
+
+    await ws_manager.broadcast(
+        ctx.business_id,
+        {"type": "order_status_changed", "order_id": order.id, "status": order.status.value},
+    )
 
     return order

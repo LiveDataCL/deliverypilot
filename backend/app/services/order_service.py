@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.ws_manager import manager as ws_manager
 from app.db.tenant import TenantContext, tenant_query
 from app.models.customer import Customer
 from app.models.enums import OrderStatus
@@ -192,6 +193,14 @@ async def create_order(db: AsyncSession, ctx: TenantContext, data: OrderCreate) 
         )
     )
     await db.flush()
+
+    # Same service-layer-triggers-side-effects precedent as
+    # order_state_machine.py's transitions -- SPEC.md §3's "eventos para el
+    # panel" explicitly includes "nuevo pedido", not just status changes.
+    await ws_manager.broadcast(
+        ctx.business_id,
+        {"type": "order_created", "order_id": order.id, "status": order.status.value},
+    )
     return order
 
 
