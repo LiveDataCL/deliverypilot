@@ -213,6 +213,23 @@ Página dedicada en el panel: **Configuración > Catálogo** y **Configuración 
 ### FASE 1 — Núcleo operativo + Autollenado
 ═══════════════════════════════════════════
 
+> **Estado (2026-07-18): NO completa.** Backend y panel web (React) están
+> completamente construidos y probados — todas las líneas de **Backend** y
+> **Panel web** de esta fase están marcadas `[x]`. Lo que falta es
+> exclusivamente el checklist de **App Flutter** (líneas más abajo), que no
+> se ha empezado. Esto no es un detalle menor: los **criterios de
+> aceptación (flujo E2E)** de esta fase — en particular el punto 2 ("push
+> llega al teléfono en <5s") y el punto 3 ("el repartidor acepta, su
+> posición se mueve en el mapa en tiempo real") — dependen de un repartidor
+> real usando la app real, y no pueden verificarse genuinamente sin ella.
+> Las pruebas de hoy (cliente WebSocket sintético simulando pings GPS, FCM
+> mockeado sin credenciales reales) confirman que el contrato del backend
+> funciona correctamente — no son lo mismo que confirmar el flujo E2E con
+> un teléfono real. **El hito "✅ piloto real con la distribuidora de agua"
+> tampoco se puede dar por cumplido todavía** por la misma razón. No marcar
+> esta fase como completa hasta que la app Flutter exista y el flujo E2E
+> se haya probado con un dispositivo real.
+
 **Backend:**
 - [x] CRUD productos + combos (`combo_items`) + tiers de precio (`price_tiers`)
 - [x] Servicio de pricing: `resolve_unit_price(product_id, quantity)` aplica el tier correcto (sección 4.4); usado al crear/editar items de pedido
