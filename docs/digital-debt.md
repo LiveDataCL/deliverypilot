@@ -45,6 +45,34 @@ let it go stale.
 
 ## Resolved
 
+### Local Gradle builds OOM on this machine — moved APK builds to CI
+
+- **Discovered:** 2026-07-18, first `flutter run` attempt on the newly-scaffolded
+  driver-app. **Resolved:** 2026-07-18, same day.
+- **What:** the Gradle daemon crashed with a JVM `Out of Memory Error`
+  (`hs_err_pid10936.log`) about 20 minutes into the first `assembleDebug` build.
+  Root cause, confirmed via the crash log and `wmic OS get
+  TotalVisibleMemorySize`: Flutter's project template sets
+  `org.gradle.jvmargs=-Xmx8G ...` in `driver-app/android/gradle.properties`,
+  but this machine only has ~4GB total physical RAM — the JVM could never
+  satisfy that heap request, template default vs. actual hardware. Reducing
+  the heap (`-Xmx1536m -XX:MaxMetaspaceSize=512m
+  -XX:ReservedCodeCacheSize=128m`) let the build proceed past the OOM point,
+  but with free memory sitting under 150MB during the retry, local builds on
+  this machine remain fragile even with the reduced heap.
+- **Fix:** rather than keep tuning JVM args against a genuinely resource-
+  constrained machine, moved APK builds to GitHub Actions
+  (`.github/workflows/build-apk.yml`) — CI runners have ample RAM, so the
+  build runs there instead of competing with this machine's other running
+  processes (Android Studio, VS Code, this session, etc.) for ~4GB total.
+  Local `flutter run` against the connected physical device is unaffected —
+  hot-reload/live debugging is not memory-constrained the same way a full
+  `assembleDebug` invocation is, and stays part of normal local dev.
+- **Status:** Resolved for the practical problem (APK builds happen
+  reliably in CI now). The underlying constraint (this machine's ~4GB RAM)
+  is not "fixed" and doesn't need to be — CI sidesteps it entirely for the
+  one task that actually needed the memory.
+
 ### deliverypilot_app had BYPASSRLS=true on both Neon branches
 
 - **Discovered:** 2026-07-17, during Neon provisioning step 5 (role safety check).

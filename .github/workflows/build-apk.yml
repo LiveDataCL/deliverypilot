@@ -1,0 +1,68 @@
+name: build-apk
+
+on:
+  push:
+    paths:
+      - "driver-app/**"
+      - ".github/workflows/build-apk.yml"
+  pull_request:
+    paths:
+      - "driver-app/**"
+      - ".github/workflows/build-apk.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: driver-app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # driver-app/android/app/build.gradle.kts pins sourceCompatibility/
+      # targetCompatibility/jvmTarget to JavaVersion.VERSION_17 explicitly --
+      # not a guess, this is what the generated Gradle config actually targets.
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Ensures the Android SDK platform/build-tools Flutter's Gradle plugin
+      # needs are present and licensed before the build runs, rather than
+      # relying on whatever ubuntu-latest happens to have preinstalled --
+      # this project needs SDK 36 (confirmed via `flutter doctor` locally),
+      # which may not be part of the runner image's default set yet.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK platform 36 and accept licenses
+        run: |
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          yes | sdkmanager --licenses
+
+      # Pinned to the exact version verified locally end-to-end (flutter
+      # doctor, physical device build) rather than "stable" floating, so CI
+      # reproduces what was actually tested.
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.6"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: driver-app-debug-apk
+          path: driver-app/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
