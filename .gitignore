@@ -16,6 +16,10 @@ backend/dist/
 .env
 .env.*
 !.env.example
+# Firebase service-account credentials (e.g. <project-id>-firebase-adminsdk-<id>.json) --
+# must never live in the repo at all (passed via env var instead), but this is a second
+# layer of protection in case one ever ends up here anyway.
+*firebase-adminsdk*.json
 
 # Node
 node_modules/
