@@ -64,7 +64,14 @@ _ALL_TABLES = (
 
 
 async def _wipe(session: AsyncSession) -> None:
-    await session.execute(text(f"TRUNCATE {_ALL_TABLES} RESTART IDENTITY CASCADE"))
+    # No RESTART IDENTITY: it requires sequence ownership, which Postgres
+    # won't grant deliverypilot_app for these identity-linked sequences no
+    # matter what (see docs/digital-debt.md) -- setval() gets the same
+    # "reseed starts fresh at 1" result via UPDATE privilege instead
+    # (migration 0004_sequence_update_grant).
+    await session.execute(text(f"TRUNCATE {_ALL_TABLES} CASCADE"))
+    for table in _ALL_TABLES.split(", "):
+        await session.execute(text(f"SELECT setval('{table}_id_seq', 1, false)"))
 
 
 async def seed() -> None:

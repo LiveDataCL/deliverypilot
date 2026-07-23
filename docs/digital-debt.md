@@ -45,6 +45,47 @@ let it go stale.
 
 ## Resolved
 
+### app/seed.py's TRUNCATE ... RESTART IDENTITY failed — deliverypilot_app didn't own the sequences
+
+- **Discovered:** 2026-07-23, first time `python -m app.seed` was run against
+  the real dev Neon database (driver-app login testing prep) — previously
+  the database had simply never been seeded since the Neon project was
+  created, so this path had never executed against a real non-owner role.
+- **What:** `TRUNCATE ... RESTART IDENTITY CASCADE` failed with
+  `InsufficientPrivilegeError: must be owner of sequence subscriptions_id_seq`.
+  Confirmed via a direct query that every one of the 15 sequences in the
+  schema was owned by the migrations role (`neondb_owner` on Neon,
+  `deliverypilot` locally), not `deliverypilot_app`. `RESTART IDENTITY`
+  performs the equivalent of `ALTER SEQUENCE ... RESTART` per sequence,
+  which Postgres requires ownership for — `db/init/01-create-app-role.sql`'s
+  `GRANT USAGE, SELECT ON SEQUENCES` was never enough for this, and would
+  have failed identically on a fresh local `docker-compose` Postgres, not
+  just on Neon. Never caught before because the test suite recreates its
+  schema via the migrations/owner role instead of running `seed.py`.
+- **First fix attempted, hit a hard wall:** a migration transferring
+  ownership of all 15 sequences to `deliverypilot_app` via
+  `ALTER SEQUENCE ... OWNER TO`. Postgres rejected it outright —
+  `FeatureNotSupportedError: cannot change owner of sequence
+  "businesses_id_seq" ... is linked to table "businesses"`. Every id column
+  in this schema is `BigInteger`/`autoincrement=True`, which SQLAlchemy
+  renders as an identity column on this Postgres version, and Postgres
+  unconditionally refuses ownership transfer for identity-linked sequences
+  — not a missing grant, a hard SQL-level restriction. Transferring the
+  *table's* ownership instead was considered and rejected: it would remove
+  the RLS design's first line of defense (migration 0002's docstring —
+  `deliverypilot_app` deliberately does not own these tables).
+- **Actual fix:** migration `0004_sequence_update_grant` grants
+  `UPDATE` on all sequences (plus `ALTER DEFAULT PRIVILEGES` so future
+  sequences are covered automatically — unlike ownership, this genuinely
+  carries forward, no per-migration follow-up needed). `app/seed.py`'s
+  `_wipe()` no longer uses `TRUNCATE ... RESTART IDENTITY` (which needs
+  ownership internally, identity-linked or not) — it does a plain TRUNCATE
+  followed by explicit `setval(seq, 1, false)` per sequence, which only
+  needs UPDATE. Same end result (reseeding still resets IDs to 1). Applied
+  uniformly through the normal `alembic upgrade head` path — local, dev
+  Neon, test Neon, future prod.
+- **Status:** Resolved 2026-07-23.
+
 ### Local Gradle builds OOM on this machine — moved APK builds to CI
 
 - **Discovered:** 2026-07-18, first `flutter run` attempt on the newly-scaffolded

@@ -35,6 +35,15 @@ ALTER DEFAULT PRIVILEGES FOR ROLE deliverypilot IN SCHEMA public
     GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON TABLES TO deliverypilot_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE deliverypilot IN SCHEMA public
     GRANT USAGE, SELECT ON SEQUENCES TO deliverypilot_app;
+-- USAGE/SELECT above is NOT enough for the TRUNCATE ... RESTART IDENTITY
+-- mentioned two lines up -- RESTART IDENTITY requires sequence *ownership*,
+-- which Postgres refuses to grant deliverypilot_app for these particular
+-- sequences regardless (identity-linked sequences can't change owner at
+-- all). app/seed.py works around this with explicit setval() calls instead
+-- of RESTART IDENTITY, which only needs UPDATE -- granted by migration
+-- 0004_sequence_update_grant, not here (these sequences don't
+-- exist yet at this point in a fresh init). See docs/digital-debt.md for
+-- the full story.
 
 -- deliverypilot_test — a second database in the same local cluster, used only
 -- when running pytest (backend/.env.example's TEST_* variables). Repeats the

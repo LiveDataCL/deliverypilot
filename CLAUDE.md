@@ -66,8 +66,15 @@ cd backend
 uv sync                       # o poetry install (usa lo que definas en Fase 0 y documéntalo)
 alembic upgrade head          # aplica migraciones
 python -m app.seed            # carga datos demo (negocio de agua)
-uvicorn app.main:app --reload # API en http://localhost:8000/docs
+uvicorn app.main:app --reload --host 0.0.0.0 # API en http://localhost:8000/docs
 ```
+
+`--host 0.0.0.0` (en vez del `127.0.0.1` por defecto de uvicorn) es necesario para
+que un dispositivo real en la misma red LAN (ej. el teléfono corriendo la app
+Flutter del repartidor) pueda conectarse — con el bind por defecto, solo esta
+misma máquina puede alcanzar la API. Confirmar también que el Firewall de
+Windows permite conexiones entrantes al puerto 8000 desde la red local (ver
+`docs/`).
 
 **Correr los tests (obligatorio antes de marcar cualquier tarea como terminada):**
 ```bash
