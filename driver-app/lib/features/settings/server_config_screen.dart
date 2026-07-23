@@ -34,8 +34,14 @@ class _ServerConfigScreenState extends ConsumerState<ServerConfigScreen> {
     final url = value?.trim() ?? '';
     if (url.isEmpty) return 'Ingresa la URL del servidor';
     final uri = Uri.tryParse(url);
-    if (uri == null || !uri.isAbsolute || !(uri.scheme == 'http' || uri.scheme == 'https')) {
-      return 'Debe ser una URL válida (http:// o https://)';
+    // http:// only, deliberately: this stack has no TLS anywhere yet (local
+    // dev backend included), so https:// silently produces a TLS handshake
+    // against a plain-HTTP port -- the server can't parse it (shows up as
+    // "Invalid HTTP request received" in its logs) and the app previously
+    // surfaced this as an opaque, undiagnosable login failure. Revisit if a
+    // real deployment ever serves this over TLS.
+    if (uri == null || !uri.isAbsolute || uri.scheme != 'http') {
+      return 'Debe ser una URL http:// válida (https:// no es compatible por ahora)';
     }
     return null;
   }
@@ -68,10 +74,10 @@ class _ServerConfigScreenState extends ConsumerState<ServerConfigScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Text(
-                    'Ingresa la dirección del backend de DeliveryPilot: la IP '
-                    'local del servidor en red de desarrollo (ej. '
-                    'http://192.168.1.50:8000), o la URL de Railway en '
-                    'producción.',
+                    'Ingresa la IP local del servidor backend en la red de '
+                    'desarrollo (ej. http://192.168.1.50:8000). Por ahora '
+                    'solo se admite http:// -- este stack todavía no sirve '
+                    'nada por https.',
                   ),
                   const SizedBox(height: 16),
                   TextFormField(

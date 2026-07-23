@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_client.dart';
@@ -76,9 +78,37 @@ class AuthController extends StateNotifier<AuthState> {
       state = await _stateForUser(user);
     } on InvalidCredentialsException {
       state = const AuthError('Email o contraseña incorrectos');
-    } catch (_) {
+    } on DioException catch (e) {
+      // Full detail to the log (dio's own LogInterceptor already covers the
+      // request/response in debug builds -- this covers cases where the
+      // error never reached that far, e.g. before a response exists at
+      // all), a specific-but-clean message to the screen instead of one
+      // generic string for every kind of failure.
+      if (kDebugMode) debugPrint('Login failed: ${e.type} ${e.message} ${e.error}');
+      state = AuthError(_messageForDioException(e));
+    } catch (e) {
+      if (kDebugMode) debugPrint('Login failed with an unexpected error: $e');
       state = const AuthError('No se pudo iniciar sesión. Intenta de nuevo.');
     }
+  }
+
+  String _messageForDioException(DioException e) {
+    return switch (e.type) {
+      DioExceptionType.connectionTimeout ||
+      DioExceptionType.sendTimeout ||
+      DioExceptionType.receiveTimeout =>
+        'El servidor no respondió a tiempo. Verifica la URL en Configurar servidor.',
+      DioExceptionType.connectionError =>
+        'No se pudo conectar al servidor. Verifica que el teléfono esté en la '
+            'misma red y que la URL en Configurar servidor sea correcta.',
+      DioExceptionType.badCertificate => 'Error de certificado del servidor.',
+      DioExceptionType.badResponse =>
+        'El servidor respondió con un error (${e.response?.statusCode ?? "desconocido"}).',
+      DioExceptionType.cancel => 'La solicitud fue cancelada.',
+      DioExceptionType.unknown ||
+      DioExceptionType.transformTimeout =>
+        'No se pudo conectar al servidor. Verifica la URL en Configurar servidor.',
+    };
   }
 
   Future<void> logout() async {

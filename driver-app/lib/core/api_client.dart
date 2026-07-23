@@ -4,6 +4,7 @@
 // ignore_for_file: prefer_initializing_formals
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 
 import 'token_storage.dart';
 
@@ -55,6 +56,17 @@ class ApiClient {
         },
       ),
     );
+
+    // Debug-only, added last so it logs the final outgoing request
+    // (including the Authorization header the interceptor above attaches).
+    // The blind two-sided investigation needed to diagnose the
+    // https-typo-against-a-plain-HTTP-backend bug (2026-07-23, see
+    // docs/digital-debt.md) is exactly what this exists to prevent next
+    // time -- never enabled in release builds, since it logs full
+    // request/response bodies and headers including bearer tokens.
+    if (kDebugMode) {
+      _dio.interceptors.add(LogInterceptor(requestBody: true, responseBody: true, error: true));
+    }
   }
 
   final Dio _dio;

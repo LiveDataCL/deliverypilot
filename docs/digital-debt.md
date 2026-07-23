@@ -45,6 +45,39 @@ let it go stale.
 
 ## Resolved
 
+### driver-app login failed silently on a real device — https:// typo against a plain-HTTP backend
+
+- **Discovered:** 2026-07-23, first real-device login test on the Redmi 10
+  (SPEC.md's App Flutter checklist item 1).
+- **What:** login showed a generic "No se pudo iniciar sesión. Intenta de
+  nuevo." with no way to tell what actually failed. Two-sided investigation:
+  the backend's own uvicorn log showed three `WARNING: Invalid HTTP request
+  received` entries (no successful phone-originated request at all) — the
+  TCP connection reached the backend fine (ruling out firewall/LAN), but
+  what arrived wasn't parseable as HTTP, the textbook symptom of a TLS
+  handshake landing on a plain-HTTP port. `adb logcat` showed the app alive
+  with no crash, but no actual dio/network detail anywhere, since
+  `ApiClient` had no logging interceptor and `AuthController.login()`
+  caught every failure into one generic message. Root cause, confirmed by
+  the user checking the phone's actual "Configurar servidor" field value:
+  `https://192.168.100.113:8000` had been entered (typo/keyboard autofill)
+  instead of `http://` — `ServerConfigScreen`'s validator accepted it
+  (it only checked for an absolute URL with an http *or* https scheme),
+  even though this backend has no TLS certificate anywhere and only ever
+  speaks plain HTTP.
+- **Fix:** `ServerConfigScreen`'s validator now rejects anything but
+  `http://` outright, with a message saying so, instead of silently
+  accepting a scheme this stack can't serve. `ApiClient` adds a `dio`
+  `LogInterceptor` in debug builds only (full request/response detail,
+  including the auth header — never enabled in release builds).
+  `AuthController.login()` now catches `DioException` specifically and
+  maps its `type` to a specific-but-clean message (timeout vs. connection
+  error vs. bad server response, etc.) instead of one generic string for
+  every failure, and `debugPrint`s the raw exception in debug builds either
+  way — so the next real-device bug doesn't need this same blind two-sided
+  investigation.
+- **Status:** Resolved 2026-07-23.
+
 ### app/seed.py's TRUNCATE ... RESTART IDENTITY failed — deliverypilot_app didn't own the sequences
 
 - **Discovered:** 2026-07-23, first time `python -m app.seed` was run against
