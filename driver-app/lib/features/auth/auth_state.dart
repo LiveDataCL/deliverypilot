@@ -1,13 +1,22 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api_client.dart';
-import '../../core/token_storage.dart';
+import '../../core/providers.dart';
 import '../../models/user.dart';
+import '../settings/server_config_state.dart';
 import 'auth_repository.dart';
 
-final tokenStorageProvider = Provider((ref) => TokenStorage());
-
-final apiClientProvider = Provider((ref) => ApiClient(tokenStorage: ref.watch(tokenStorageProvider)));
+// Only reachable once ServerConfigSet -- AppGate doesn't mount anything that
+// watches authControllerProvider (and so doesn't construct AuthController,
+// whose constructor kicks off _bootstrap()'s fetchMe() call) until the
+// server config state is confirmed set. That ordering matters: without it, a
+// stored session could get wrongly wiped by a bootstrap request firing
+// against an empty/unknown baseUrl before the real one is known.
+final apiClientProvider = Provider((ref) {
+  final serverConfig = ref.watch(serverConfigProvider);
+  final baseUrl = serverConfig is ServerConfigSet ? serverConfig.baseUrl : '';
+  return ApiClient(baseUrl: baseUrl, tokenStorage: ref.watch(tokenStorageProvider));
+});
 
 final authRepositoryProvider = Provider(
   (ref) => AuthRepository(

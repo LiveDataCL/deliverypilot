@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../settings/server_config_screen.dart';
 import 'auth_state.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -39,7 +40,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final errorMessage = authState is AuthError ? authState.message : null;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('DeliveryPilot Repartidor')),
+      appBar: AppBar(
+        title: const Text('DeliveryPilot Repartidor'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Configurar servidor',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ServerConfigScreen()),
+            ),
+          ),
+        ],
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),

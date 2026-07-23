@@ -5,7 +5,6 @@
 
 import 'package:dio/dio.dart';
 
-import 'env.dart';
 import 'token_storage.dart';
 
 /// Thrown when a request 401s and there's no usable refresh token (or the
@@ -23,9 +22,9 @@ class ApiClient {
   // Can't use an initializing formal (this._tokenStorage) here: the field is
   // private, and callers constructing ApiClient live in other files/libraries
   // that can't reference a private named parameter.
-  ApiClient({required TokenStorage tokenStorage, Dio? dio})
+  ApiClient({required String baseUrl, required TokenStorage tokenStorage, Dio? dio})
       : _tokenStorage = tokenStorage,
-        _dio = dio ?? Dio(BaseOptions(baseUrl: Env.apiBaseUrl)) {
+        _dio = dio ?? Dio(BaseOptions(baseUrl: baseUrl)) {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
@@ -70,7 +69,7 @@ class ApiClient {
     final tokens = await _tokenStorage.read();
     if (tokens == null) throw SessionExpiredException();
 
-    final response = await Dio(BaseOptions(baseUrl: Env.apiBaseUrl)).post(
+    final response = await Dio(BaseOptions(baseUrl: _dio.options.baseUrl)).post(
       '/api/v1/auth/refresh',
       data: {'refresh_token': tokens.refreshToken},
     );
