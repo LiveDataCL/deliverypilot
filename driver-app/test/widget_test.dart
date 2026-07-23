@@ -1,30 +1,40 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:driver/core/token_storage.dart';
+import 'package:driver/features/auth/auth_state.dart';
 import 'package:driver/main.dart';
 
+/// Never touches the real flutter_secure_storage platform channel, which
+/// isn't available under flutter_test -- AuthController.bootstrap() calls
+/// TokenStorage.read() unconditionally on startup, so the real
+/// FlutterSecureStorage-backed implementation would throw
+/// MissingPluginException before any widget renders.
+class _FakeTokenStorage extends TokenStorage {
+  AuthTokens? _tokens;
+
+  @override
+  Future<AuthTokens?> read() async => _tokens;
+
+  @override
+  Future<void> write(AuthTokens tokens) async => _tokens = tokens;
+
+  @override
+  Future<void> clear() async => _tokens = null;
+}
+
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('shows the login form when there is no stored session', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [tokenStorageProvider.overrideWithValue(_FakeTokenStorage())],
+        child: const DriverApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Email'), findsOneWidget);
+    expect(find.text('Contraseña'), findsOneWidget);
+    expect(find.text('Ingresar'), findsOneWidget);
   });
 }
