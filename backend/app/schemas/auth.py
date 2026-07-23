@@ -33,6 +33,10 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class FcmTokenUpdateRequest(BaseModel):
+    fcm_token: str = Field(min_length=1, max_length=255)
+
+
 class UserOut(BaseModel):
     id: int
     business_id: int

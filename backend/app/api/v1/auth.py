@@ -5,7 +5,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import get_current_user, get_db
 from app.core.security import create_access_token, create_refresh_token, decode_token
 from app.models.user import User
-from app.schemas.auth import LoginRequest, RefreshRequest, RegisterRequest, TokenResponse, UserOut
+from app.schemas.auth import (
+    FcmTokenUpdateRequest,
+    LoginRequest,
+    RefreshRequest,
+    RegisterRequest,
+    TokenResponse,
+    UserOut,
+)
 from app.schemas.staff import AcceptInviteIn
 from app.services import auth_service, staff_service
 
@@ -90,6 +97,18 @@ async def refresh(payload: RefreshRequest, db: AsyncSession = Depends(get_db)) -
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user)) -> User:
     return user
+
+
+@router.patch("/me/fcm-token", response_model=UserOut)
+async def update_fcm_token(
+    payload: FcmTokenUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Driver-app checkpoint (SPEC.md App Flutter): registers the device's FCM
+    token against the authenticated user's own account so order-assignment
+    pushes (fcm_service.send_push) have somewhere to go."""
+    return await auth_service.update_fcm_token(db, user=user, fcm_token=payload.fcm_token)
 
 
 @router.post("/accept-invite", response_model=TokenResponse)

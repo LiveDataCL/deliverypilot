@@ -57,3 +57,13 @@ async def authenticate(db: AsyncSession, *, email: str, password: str) -> User |
     if not verify_password(password, user.password_hash):
         return None
     return user
+
+
+async def update_fcm_token(db: AsyncSession, *, user: User, fcm_token: str) -> User:
+    """Self-service device-token registration (driver-app Fase 1 checklist).
+    Overwrites unconditionally -- a user only ever has one active device
+    registered at a time, so the latest call wins, same as re-logging-in on
+    a new phone naturally displacing the old token."""
+    user.fcm_token = fcm_token
+    await db.flush()
+    return user

@@ -9,6 +9,37 @@ from tests.conftest import register_business
 pytestmark = pytest.mark.asyncio
 
 
+async def test_update_fcm_token_requires_a_valid_access_token(client: AsyncClient):
+    response = await client.patch("/api/v1/auth/me/fcm-token", json={"fcm_token": "some-device-token"})
+    assert response.status_code == 401
+
+
+async def test_update_fcm_token_persists_it_on_the_authenticated_users_own_account(
+    client: AsyncClient, db_session
+):
+    tokens = await register_business(client, business_name="Negocio FCM", email="fcm1@example.com")
+    response = await client.patch(
+        "/api/v1/auth/me/fcm-token",
+        json={"fcm_token": "device-token-abc123"},
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+    assert response.status_code == 200
+    assert response.json()["email"] == "fcm1@example.com"
+
+    user = await db_session.scalar(select(User).where(User.email == "fcm1@example.com"))
+    assert user.fcm_token == "device-token-abc123"
+
+
+async def test_update_fcm_token_rejects_an_empty_token(client: AsyncClient):
+    tokens = await register_business(client, business_name="Negocio FCM2", email="fcm2@example.com")
+    response = await client.patch(
+        "/api/v1/auth/me/fcm-token",
+        json={"fcm_token": ""},
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+    assert response.status_code == 422
+
+
 async def test_register_creates_business_and_owner_and_returns_tokens(client: AsyncClient):
     tokens = await register_business(
         client, business_name="Aguas Test SpA", email="owner1@example.com"
