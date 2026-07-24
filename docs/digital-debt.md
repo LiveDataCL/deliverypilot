@@ -43,6 +43,41 @@ let it go stale.
   presumably Fase 1+ going forward) is unblocked. Local Postgres-backed dev
   is unconfirmed either way.
 
+### build-apk.yml signs each run with a different ephemeral debug key — reinstalling over a previous CI build requires an uninstall first
+
+- **Discovered:** 2026-07-23, reinstalling a second CI-built debug APK over
+  the first one on the Redmi 10 during driver-app login testing.
+- **What:** `INSTALL_FAILED_UPDATE_INCOMPATIBLE` — Android refuses to
+  install an APK over an already-installed one if the signatures don't
+  match. `driver-app/android/app/build.gradle.kts` signs debug builds with
+  Gradle's default `debug` signing config, which auto-generates
+  `~/.android/debug.keystore` the first time it's needed if one doesn't
+  already exist. `build-apk.yml` runs on a fresh GitHub Actions runner
+  every time with no keystore caching step, so that auto-generation fires
+  on every single run — each CI-built APK ends up signed with a different,
+  ephemeral key, even though nothing about the app's own config changed.
+  Confirmed via `build.gradle.kts` (no `storeFile` pointing at a checked-in
+  keystore) and `build-apk.yml` (no cache step for `~/.android`).
+- **Impact:** minor friction only — every on-device test of a new CI build
+  needs `adb uninstall cl.livedata.deliverypilot.driver` before
+  `adb install`, or the install silently fails with the error above.
+  Doesn't affect CI success/failure, doesn't affect a real signed release
+  (that's a separate, not-yet-created signing config — SPEC.md's "Build
+  APK firmado" line), and doesn't affect `flutter run` against a locally
+  connected device (that always uses this same machine's own persistent
+  `~/.android/debug.keystore`, so it's stable run-to-run locally — only CI
+  builds are affected).
+- **Candidate fixes, not applied yet:** (a) commit a fixed debug keystore
+  into the repo (or a CI secret) and point `signingConfigs.debug.storeFile`
+  at it explicitly, so every CI build — and every local build — signs with
+  the same key; or (b) cache `~/.android/debug.keystore` between
+  `build-apk.yml` runs via `actions/cache`, simpler but slightly less
+  robust (a cache eviction would still require one uninstall). Neither is
+  worth doing until this friction actually costs real time — noted here so
+  it isn't rediscovered from scratch next time.
+- **Status:** Open, low priority/quality-of-life only. Workaround
+  (uninstall before reinstall) is sufficient for now.
+
 ## Resolved
 
 ### driver-app login failed silently on a real device — https:// typo against a plain-HTTP backend
