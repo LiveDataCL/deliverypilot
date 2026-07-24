@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,7 +8,13 @@ import 'features/home/home_screen.dart';
 import 'features/settings/server_config_screen.dart';
 import 'features/settings/server_config_state.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // No explicit FirebaseOptions: android/app/google-services.json + the
+  // google-services Gradle plugin already provide everything
+  // Firebase.initializeApp() needs on Android (the only platform this app
+  // targets -- see pubspec.yaml).
+  await Firebase.initializeApp();
   runApp(const ProviderScope(child: DriverApp()));
 }
 

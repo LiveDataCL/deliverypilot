@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -125,7 +128,25 @@ class AuthController extends StateNotifier<AuthState> {
       await _repository.logout();
       return const AuthError('Esta app es solo para repartidores.');
     }
+    // Fire-and-forget: covers both a fresh login and an already-authenticated
+    // app relaunch (this runs on both _bootstrap()'s and login()'s path to
+    // AuthAuthenticated). Never awaited/blocking -- a missing token (no
+    // Google Play Services, notification permission not granted yet --
+    // that onboarding is a separate, later SPEC.md checklist item) must
+    // never delay or fail login, same graceful-degradation tolerance
+    // fcm_service.py already applies server-side.
+    unawaited(_registerFcmToken());
     return AuthAuthenticated(user);
+  }
+
+  Future<void> _registerFcmToken() async {
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token == null) return;
+      await _repository.registerFcmToken(token);
+    } catch (e) {
+      if (kDebugMode) debugPrint('FCM token registration failed (non-fatal): $e');
+    }
   }
 }
 

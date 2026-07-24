@@ -47,6 +47,15 @@ dependencies:
   # JWT access/refresh token pair storage -- Android Keystore-backed
   # (EncryptedSharedPreferences), not plain SharedPreferences.
   flutter_secure_storage: ^9.2.2
+  # Deferred from the login checkpoint until a real Firebase project +
+  # android/app/google-services.json existed (see docs/digital-debt.md) --
+  # adding the Gradle plugin without a real google-services.json breaks the
+  # build. Android-only project (no iOS in SPEC.md), so Firebase.initializeApp()
+  # with no explicit options works directly off google-services.json + the
+  # google-services Gradle plugin -- no firebase_options.dart/flutterfire
+  # CLI needed.
+  firebase_core: ^4.12.1
+  firebase_messaging: ^16.4.3
 
 dev_dependencies:
   flutter_test:

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "825894492346",
+    "project_id": "deliverypilot",
+    "storage_bucket": "deliverypilot.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:825894492346:android:0bb7507889669736da8a83",
+        "android_client_info": {
+          "package_name": "cl.livedata.deliverypilot.driver"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCUMpgKkQq0QMEqvpxRyBlbuDw-uAmPJmQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
